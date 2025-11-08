@@ -10,6 +10,9 @@ class RobotService {
   Timer? _cmdVelTimer; // Timer pour envoyer cmd_vel à 10Hz
   UDP? _udpSender;
   StreamSubscription<Datagram?>? _udpListenerSubscription;
+  // Socket TCP persistant vers le serveur de contrôle
+  Socket? _tcpSocket;
+  StreamSubscription<List<int>>? _tcpListener;
 
   RobotService(this._provider);
 
@@ -35,9 +38,56 @@ class RobotService {
       socket.write(json.encode(registerMsg));
       await socket.flush();
 
-      // Écoute de la réponse
-      final responseData = await socket.first; 
-      final response = json.decode(utf8.decode(responseData));
+      // Prépare la socket persistante et un listener unique. On utilise un
+      // Completer pour attendre la première réponse (sans appeler socket.first
+      // qui attacherait un listener séparé et provoquerait "Stream has already
+      // been listened to").
+      _tcpSocket = socket;
+      final completer = Completer<Map<String, dynamic>>();
+
+      _tcpListener = _tcpSocket!.listen((data) {
+        try {
+          final msg = json.decode(utf8.decode(data));
+          if (!completer.isCompleted) {
+            // Première réponse : utilisée pour l'enregistrement
+            completer.complete(Map<String, dynamic>.from(msg));
+          } else {
+            // Messages TCP suivants
+            print('[TCP] Message reçu du serveur: $msg');
+          }
+        } catch (e) {
+          print('[TCP] Erreur décodage message TCP: $e');
+          if (!completer.isCompleted) completer.completeError(e);
+        }
+      }, onError: (e) {
+        print('[TCP] Erreur socket: $e');
+        if (!completer.isCompleted) completer.completeError(e);
+      }, onDone: () {
+        print('[TCP] Socket fermée par le serveur');
+        _provider.setConnectionStatus(false);
+        _tcpSocket = null;
+        if (!completer.isCompleted) {
+          completer.completeError(StateError('Socket closed before response'));
+        }
+      }, cancelOnError: true);
+
+      // Attend la première réponse (timeout raisonnable)
+      Map<String, dynamic> response;
+      try {
+        response = await completer.future.timeout(const Duration(seconds: 5));
+      } catch (e) {
+        print('[TCP] Échec lecture réponse d\'enregistrement: $e');
+        // Nettoyage en cas d'échec
+        try {
+          await _tcpListener?.cancel();
+        } catch (_) {}
+        try {
+          _tcpSocket?.destroy();
+        } catch (_) {}
+        _tcpSocket = null;
+        _provider.setConnectionStatus(false);
+        return false;
+      }
 
       // --- AVEC LES CORRECTIONS DU .get() ---
       if (response["ok"] == true) { 
@@ -46,13 +96,14 @@ class RobotService {
           _provider.setServerUdpPort(port);
           _provider.setConnectionStatus(true);
           print("[TCP] Enregistrement réussi. Port UDP du serveur: $port");
-          socket.destroy();
           return true;
         }
       }
-
       print("[TCP] Échec de l'enregistrement: ${response['error']}"); 
-      socket.destroy();
+      // Si l'enregistrement a échoué, on ferme la socket car elle n'est pas utile
+      try {
+        socket.destroy();
+      } catch (_) {}
       return false;
 
     } catch (e) {
@@ -136,12 +187,56 @@ class RobotService {
     });
   }
 
+  // --- Envoi d'une commande d'arrêt immédiate via TCP pour assurer l'arrêt ---
+  void sendImmediateStop() {
+    print("[TCP] Envoi d'une commande d'arrêt immédiate.");
+    final stopMsg = {
+      "type": "emergency_stop",
+      "client_id": _provider.clientID
+    };
+
+    if (_tcpSocket != null) {
+      try {
+        _tcpSocket!.write(json.encode(stopMsg));
+        _tcpSocket!.flush();
+      } catch (e) {
+        print("[TCP] Erreur en envoyant stop via socket existante: $e");
+      }
+      return;
+    }
+
+    // Si pas de socket persistante, on ouvre une connexion éphémère
+    Socket.connect(
+      _provider.serverIP,
+      _provider.tcpControlPort,
+      timeout: const Duration(seconds: 5),
+    ).then((socket) {
+      try {
+        socket.write(json.encode(stopMsg));
+        socket.flush().then((_) => socket.destroy());
+      } catch (e) {
+        print("[TCP] Erreur en envoyant stop (connexion éphémère): $e");
+        try {
+          socket.destroy();
+        } catch (_) {}
+      }
+    }).catchError((e) {
+      print("[TCP] Échec de connexion pour l'arrêt immédiat: $e");
+    });
+  }
+
   // --- Nettoyage ---
   void disconnect() {
     print("Déconnexion...");
     _cmdVelTimer?.cancel();
     _udpListenerSubscription?.cancel();
     _udpSender?.close();
+    // Ferme la connexion TCP persistante si elle existe
+    _tcpListener?.cancel();
+    try {
+      _tcpSocket?.destroy();
+    } catch (_) {}
+    _tcpSocket = null;
     _provider.setConnectionStatus(false);
   }
 }

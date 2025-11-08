@@ -156,6 +156,28 @@ class _ControlScreenState extends State<ControlScreen> {
               ),
             ),
 
+            // --- 4. Bouton d'arret d'urgence (flottant en bas a droite) ---
+            Positioned(
+              bottom: 20,
+              right: 20,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.red,
+                  shape: const CircleBorder(),
+                  padding: const EdgeInsets.all(20),
+                ),
+                onPressed: () {
+                  setState(() {
+                    _cmdLinear = 0.0;
+                    _cmdAngular = 0.0;
+                  });
+                  // Optionnel: Envoyer immédiatement une commande d'arrêt
+                  _robotService.sendImmediateStop();
+                },
+                child: const Icon(Icons.stop, color: Colors.white, size: 30),
+              ),
+            )
+
           ],
         ),
       ),
