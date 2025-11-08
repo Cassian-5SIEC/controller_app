@@ -23,6 +23,8 @@ class _ControlScreenState extends State<ControlScreen> {
   double _cmdLinear = 0.0;
   double _cmdAngular = 0.0;
 
+  int _modeIndex = 0; // 0: Manuel, 1: Auto, 2: Configuration
+
   @override
   void initState() {
     super.initState();
@@ -186,6 +188,7 @@ class _ControlScreenState extends State<ControlScreen> {
               bottom: 20,
               left: MediaQuery.of(context).size.width / 2 - 30,
               child: ToggleSwitch(
+                initialLabelIndex: _modeIndex,
                 customWidths: [50.0, 50.0, 50.0],
                 cornerRadius: 2.0,
                 activeBgColors: [[Colors.cyan], [Colors.cyan], [Colors.cyan]],
@@ -197,6 +200,9 @@ class _ControlScreenState extends State<ControlScreen> {
                 icons: [FontAwesomeIcons.user, FontAwesomeIcons.robot, FontAwesomeIcons.gear],
                 onToggle: (index) {
                   print('switched to: $index');
+                  setState(() {
+                    _modeIndex = index ?? 0;
+                  });
                   _robotService.setMode(index ?? 0);
                 },
               ),
