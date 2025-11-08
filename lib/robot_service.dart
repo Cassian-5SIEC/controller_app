@@ -47,13 +47,37 @@ class RobotService {
 
       _tcpListener = _tcpSocket!.listen((data) {
         try {
-          final msg = json.decode(utf8.decode(data));
+          final decoded = json.decode(utf8.decode(data));
+          // Assure que c'est un map
+          Map<String, dynamic> msg;
+          try {
+            msg = Map<String, dynamic>.from(decoded);
+          } catch (e) {
+            // Si ce n'est pas un objet JSON, on skip
+            print('[TCP] Message non-objet reçu: $decoded');
+            if (!completer.isCompleted) completer.completeError(StateError('Invalid registration response'));
+            return;
+          }
+
           if (!completer.isCompleted) {
             // Première réponse : utilisée pour l'enregistrement
-            completer.complete(Map<String, dynamic>.from(msg));
+            completer.complete(msg);
           } else {
             // Messages TCP suivants
-            print('[TCP] Message reçu du serveur: $msg');
+            // Si le serveur envoie un heartbeat, on renvoie un ack
+            final type = msg['type'];
+            if (type == 'heartbeat') {
+              try {
+                final ack = json.encode({'type': 'heartbeat_ack'});
+                _tcpSocket?.write(ack);
+                _tcpSocket?.flush();
+                print('[TCP] Heartbeat reçu - ack envoyé');
+              } catch (e) {
+                print('[TCP] Erreur en envoyant heartbeat_ack: $e');
+              }
+            } else {
+              print('[TCP] Message reçu du serveur: $msg');
+            }
           }
         } catch (e) {
           print('[TCP] Erreur décodage message TCP: $e');
