@@ -38,6 +38,8 @@ dependencies:
   provider: ^6.1.5+1
   shared_preferences: ^2.5.3
   udp: ^5.0.3
+  toggle_switch: ^2.3.0
+  font_awesome_flutter: ^10.4.0
 
 dev_dependencies:
   flutter_test:

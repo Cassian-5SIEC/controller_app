@@ -249,6 +249,81 @@ class RobotService {
     });
   }
 
+  void sendStart() {
+    print("[TCP] Envoi d'une commande de démarrage.");
+    final startMsg = {
+      "type": "start",
+      "client_id": _provider.clientID
+    };
+
+    if (_tcpSocket != null) {
+      try {
+        _tcpSocket!.write(json.encode(startMsg));
+        _tcpSocket!.flush();
+      } catch (e) {
+        print("[TCP] Erreur en envoyant start via socket existante: $e");
+      }
+      return;
+    }
+
+    // Si pas de socket persistante, on ouvre une connexion éphémère
+    Socket.connect(
+      _provider.serverIP,
+      _provider.tcpControlPort,
+      timeout: const Duration(seconds: 5),
+    ).then((socket) {
+      try {
+        socket.write(json.encode(startMsg));
+        socket.flush().then((_) => socket.destroy());
+      } catch (e) {
+        print("[TCP] Erreur en envoyant start (connexion éphémère): $e");
+        try {
+          socket.destroy();
+        } catch (_) {}
+      }
+    }).catchError((e) {
+      print("[TCP] Échec de connexion pour le démarrage: $e");
+    });
+  }
+
+  void setMode(int modeIndex) {
+    print("[TCP] Envoi d'une commande de changement de mode: $modeIndex");
+    final modeMsg = {
+      "type": "set_mode",
+      "client_id": _provider.clientID,
+      "mode": modeIndex
+    };
+
+    if (_tcpSocket != null) {
+      try {
+        _tcpSocket!.write(json.encode(modeMsg));
+        _tcpSocket!.flush();
+      } catch (e) {
+        print("[TCP] Erreur en envoyant set_mode via socket existante: $e");
+      }
+      return;
+    }
+
+    // Si pas de socket persistante, on ouvre une connexion éphémère
+    Socket.connect(
+      _provider.serverIP,
+      _provider.tcpControlPort,
+      timeout: const Duration(seconds: 5),
+    ).then((socket) {
+      try {
+        socket.write(json.encode(modeMsg));
+        socket.flush().then((_) => socket.destroy());
+      } catch (e) {
+        print("[TCP] Erreur en envoyant set_mode (connexion éphémère): $e");
+        try {
+          socket.destroy();
+        } catch (_) {}
+      }
+    }).catchError((e) {
+      print("[TCP] Échec de connexion pour le changement de mode: $e");
+    });
+  }
+
   // --- Nettoyage ---
   void disconnect() {
     print("Déconnexion...");

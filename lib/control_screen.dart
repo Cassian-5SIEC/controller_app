@@ -6,6 +6,8 @@ import 'robot_provider.dart';
 import 'robot_service.dart';
 import 'settings_screen.dart';
 import 'package:flutter/services.dart';
+import 'package:toggle_switch/toggle_switch.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 class ControlScreen extends StatefulWidget {
   const ControlScreen({Key? key}) : super(key: key);
@@ -165,6 +167,7 @@ class _ControlScreenState extends State<ControlScreen> {
                   backgroundColor: Colors.red,
                   shape: const CircleBorder(),
                   padding: const EdgeInsets.all(20),
+                  minimumSize: const Size(100, 100),
                 ),
                 onPressed: () {
                   setState(() {
@@ -176,7 +179,51 @@ class _ControlScreenState extends State<ControlScreen> {
                 },
                 child: const Icon(Icons.stop, color: Colors.white, size: 30),
               ),
-            )
+            ),
+
+            // --- 5. Switch de mode (flottant en bas au centre) ---
+            Positioned(
+              bottom: 20,
+              left: MediaQuery.of(context).size.width / 2 - 30,
+              child: ToggleSwitch(
+                customWidths: [50.0, 50.0, 50.0],
+                cornerRadius: 2.0,
+                activeBgColors: [[Colors.cyan], [Colors.cyan], [Colors.cyan]],
+                activeFgColor: Colors.white,
+                inactiveBgColor: Colors.grey,
+                inactiveFgColor: Colors.white,
+                totalSwitches: 3,
+                labels: ['', '', ''],
+                icons: [FontAwesomeIcons.user, FontAwesomeIcons.robot, FontAwesomeIcons.gear],
+                onToggle: (index) {
+                  print('switched to: $index');
+                  _robotService.setMode(index ?? 0);
+                },
+              ),
+            ),
+
+            // --- 4. Bouton de démarrage (flottant en bas à droite du bouton d'arrêt) ---
+            Positioned(
+              bottom: 20,
+              right: 150,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.green,
+                  shape: const CircleBorder(),
+                  padding: const EdgeInsets.all(20),
+                  minimumSize: const Size(40, 40),
+                ),
+                onPressed: () {
+                  setState(() {
+                    _cmdLinear = 0.0;
+                    _cmdAngular = 0.0;
+                  });
+                  // Optionnel: Envoyer immédiatement une commande de démarrage
+                  _robotService.sendStart();
+                },
+                child: const Icon(Icons.play_arrow, color: Colors.white, size: 30),
+              ),
+            ),
 
           ],
         ),
