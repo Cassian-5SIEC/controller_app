@@ -26,7 +26,7 @@ A simple Flutter application for Android designed to remotely control a robot (e
 1.  **Clone the repository:**
 
     ```bash
-    git clone https://your-repo-url/robot_controller_app.git
+    git clone https://github.com/Cassian-5SIEC/controller_app.git
     cd robot_controller_app
     ```
 
