@@ -10,7 +10,7 @@ import 'package:toggle_switch/toggle_switch.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 class ControlScreen extends StatefulWidget {
-  const ControlScreen({Key? key}) : super(key: key);
+  const ControlScreen({super.key});
 
   @override
   _ControlScreenState createState() => _ControlScreenState();
@@ -107,7 +107,7 @@ class _ControlScreenState extends State<ControlScreen> {
                       listener: (details) {
                         setState(() {
                           _cmdLinear = -details.y;
-                          _cmdAngular = -details.x;
+                          _cmdAngular = details.x;
                         });
                       },
                     ),

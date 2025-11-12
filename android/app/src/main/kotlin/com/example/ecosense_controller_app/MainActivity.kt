@@ -1,4 +1,4 @@
-package com.example.ecosense_controller_app
+package fr.chourret.ecosense_controller_app
 
 import io.flutter.embedding.android.FlutterActivity
 

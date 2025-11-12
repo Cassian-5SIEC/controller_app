@@ -1,6 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application
-        android:label="ecosense_controller_app"
+        android:label="ECOSense"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity
