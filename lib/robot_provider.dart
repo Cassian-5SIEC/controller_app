@@ -3,9 +3,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 class RobotProvider with ChangeNotifier {
   // --- Configuration (avec valeurs par défaut)
-  String _serverIP = "127.0.0.1";
+  String _serverIP = "192.168.1.2";
   int _tcpControlPort = 5001;
-  String _clientID = "robot_1";
+  String _clientID = "controller";
   int _clientRecvUdpPort = 6006;
   
   // Port UDP du serveur (obtenu après enregistrement)
