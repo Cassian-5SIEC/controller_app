@@ -9,6 +9,8 @@ import 'package:flutter/services.dart';
 import 'package:toggle_switch/toggle_switch.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
+import 'package:flutter_gstreamer_player/flutter_gstreamer_player.dart';
+
 class ControlScreen extends StatefulWidget {
   const ControlScreen({super.key});
 
@@ -28,7 +30,7 @@ class _ControlScreenState extends State<ControlScreen> {
   @override
   void initState() {
     super.initState();
-    // Lie le service au provider
+    // Lie le service au provide
     _robotService = RobotService(context.read<RobotProvider>());
     _connect(); // Tente la connexion au démarrage
   }
@@ -75,6 +77,27 @@ class _ControlScreenState extends State<ControlScreen> {
         // On utilise un Stack pour superposer les éléments
         child: Stack(
           children: [
+
+            // --- 0. Vidéo (Background) ---
+            Center(
+              child: FractionallySizedBox(
+                widthFactor: 1,
+                heightFactor: 1,
+                child: GstPlayer(
+                  pipeline:
+'''
+udpsrc port=5004 
+! application/x-rtp,media=video,clock-rate=90000,encoding-name=H264,payload=96 
+! rtph264depay 
+! h264parse 
+! decodebin 
+! videoconvert 
+! video/x-raw,format=RGBA 
+! appsink name=sink sync=false
+''',
+                ),
+              ),
+            ),
 
             // --- 1. Contenu principal (Joysticks et Odom) ---
             Column(

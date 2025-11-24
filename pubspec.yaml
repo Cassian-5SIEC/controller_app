@@ -41,6 +41,9 @@ dependencies:
   toggle_switch: ^2.3.0
   font_awesome_flutter: ^10.4.0
   flutter_launcher_icons: ^0.14.4
+  #flutter_vlc_player: ^7.2.0
+  flutter_gstreamer_player:
+    path: ./packages/flutter_gstreamer_player-0.0.3
 
 flutter_icons:
   android: true

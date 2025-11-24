@@ -2,8 +2,9 @@
 import 'dart:io';
 import 'dart:convert';
 import 'dart:async';
+import 'dart:typed_data';
 import 'package:udp/udp.dart';
-import 'robot_provider.dart'; // Importez votre provider
+import 'robot_provider.dart';
 
 class RobotService {
   final RobotProvider _provider;
@@ -12,7 +13,7 @@ class RobotService {
   StreamSubscription<Datagram?>? _udpListenerSubscription;
   // Socket TCP persistant vers le serveur de contrôle
   Socket? _tcpSocket;
-  StreamSubscription<List<int>>? _tcpListener;
+  StreamSubscription? _tcpListener;
 
   RobotService(this._provider);
 
@@ -30,7 +31,8 @@ class RobotService {
       final registerMsg = {
         "type": "register",
         "client_id": _provider.clientID,
-        "recv_udp_port": _provider.clientRecvUdpPort
+        "recv_udp_port": _provider.clientRecvUdpPort,
+        "recv_image_port": 5004,
       };
       // --- FIN DU BLOC ---
 
@@ -45,9 +47,13 @@ class RobotService {
       _tcpSocket = socket;
       final completer = Completer<Map<String, dynamic>>();
 
-      _tcpListener = _tcpSocket!.listen((data) {
+      _tcpListener = _tcpSocket!
+          .cast<List<int>>()          // <-- this is the key part
+          .transform(utf8.decoder)
+          .transform(const LineSplitter())
+          .listen((data) {
         try {
-          final decoded = json.decode(utf8.decode(data));
+          final decoded = json.decode(data);
           // Assure que c'est un map
           Map<String, dynamic> msg;
           try {
