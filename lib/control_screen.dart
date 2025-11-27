@@ -106,8 +106,9 @@ udpsrc port=5004
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: [
-                      _buildOdomDisplay("Linéaire (X)", provider.odomLinearX),
-                      _buildOdomDisplay("Angulaire (Z)", provider.odomAngularZ),
+                      _buildOdomDisplay("Speed", provider.odomLinearX),
+                      _buildOdomDisplay("Direction", provider.odomAngularZ),
+                      _buildOdomDisplay("Battery Level", provider.batteryLevel)
                     ],
                   ),
                 ),

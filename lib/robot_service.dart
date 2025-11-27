@@ -157,12 +157,15 @@ class RobotService {
         if (datagram == null) return;
         try {
           final message = json.decode(utf8.decode(datagram.data));
-          if (message.get("type") == "real_vel") {
-            double lx = message.get('linear_x', 0.0).toDouble();
-            double az = message.get('angular_z', 0.0).toDouble();
+          if (message["type"] == "real_vel") {
+            double lx = (message['linear_x'] ?? 0.0).toDouble();
+            double az = (message['angular_z'] ?? 0.0).toDouble();
             
             // Met à jour le provider (ce qui mettra à jour l'UI)
             _provider.updateOdometry(lx, az);
+          } else if (message["type"] == "general_data") {
+            double level = (message['battery_level'] ?? 0.0).toDouble();
+            _provider.updateBatteryLevel(level);
           }
         } catch (e) {
           print("[UDP-Listener] Erreur décodage: $e");

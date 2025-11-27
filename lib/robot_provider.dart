@@ -15,6 +15,7 @@ class RobotProvider with ChangeNotifier {
   bool _isConnected = false;
   double _odomLinearX = 0.0;
   double _odomAngularZ = 0.0;
+  double _batteryLevel = 0.0;
 
   // --- Getters (pour l'UI)
   String get serverIP => _serverIP;
@@ -25,6 +26,7 @@ class RobotProvider with ChangeNotifier {
   bool get isConnected => _isConnected;
   double get odomLinearX => _odomLinearX;
   double get odomAngularZ => _odomAngularZ;
+  double get batteryLevel => _batteryLevel;
 
   // --- Actions (appelées par le service réseau ou l'UI)
 
@@ -41,6 +43,11 @@ class RobotProvider with ChangeNotifier {
   void updateOdometry(double linearX, double angularZ) {
     _odomLinearX = linearX;
     _odomAngularZ = angularZ;
+    notifyListeners();
+  }
+
+  void updateBatteryLevel(double level) {
+    _batteryLevel = level;
     notifyListeners();
   }
   
