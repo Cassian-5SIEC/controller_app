@@ -80,12 +80,10 @@ class _ControlScreenState extends State<ControlScreen> {
 
             // --- 0. Vidéo (Background) ---
             Center(
-              child: FractionallySizedBox(
-                widthFactor: 1,
-                heightFactor: 1,
+              child: AspectRatio(
+                aspectRatio: 4 / 3, // <-- set your desired aspect ratio here
                 child: GstPlayer(
-                  pipeline:
-'''
+                  pipeline: '''
 udpsrc port=5004 
 ! application/x-rtp,media=video,clock-rate=90000,encoding-name=H264,payload=96 
 ! rtph264depay 
