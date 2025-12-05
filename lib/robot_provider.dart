@@ -17,6 +17,17 @@ class RobotProvider with ChangeNotifier {
   double _odomAngularZ = 0.0;
   double _batteryLevel = 0.0;
 
+  // --- Map Data ---
+  List<int> _mapData = [];
+  int _mapWidth = 0;
+  int _mapHeight = 0;
+  double _mapResolution = 0.05;
+
+  List<int> get mapData => _mapData;
+  int get mapWidth => _mapWidth;
+  int get mapHeight => _mapHeight;
+  double get mapResolution => _mapResolution;
+
   // --- Getters (pour l'UI)
   String get serverIP => _serverIP;
   int get tcpControlPort => _tcpControlPort;
@@ -46,8 +57,67 @@ class RobotProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  void updateBatteryLevel(double level) {
-    _batteryLevel = level;
+  void updateBatteryLevel(double voltage) {
+    // Convert the raw voltage to a percentage using lead-acid curve
+    double newPercentage = _getLeadAcidPercentage(voltage);
+
+    // Optional: Add simple smoothing (low-pass filter) to prevent UI flickering
+    // if the voltage fluctuates rapidly due to motor spikes.
+    // _batteryLevel = (_batteryLevel * 0.8) + (newPercentage * 0.2);
+
+    _batteryLevel = newPercentage;
+    notifyListeners();
+  }
+
+  /// Calculates percentage for a 12V Lead-Acid Battery
+  /// Based on standard discharge curves under light-to-medium load.
+  double _getLeadAcidPercentage(double voltage) {
+    // 1. Cap values above max charge (Charging state can go up to 14V+)
+    if (voltage >= 12.7) return 100.0;
+
+    // 2. Cutoff for "Dead" (Deep discharge damages lead batteries)
+    if (voltage <= 10.5) return 0.0;
+
+    // 3. The Lookup Table (Voltage Threshold -> Percentage)
+    // Adjust these values based on your specific battery datasheet if needed.
+    // [Voltage, Percentage]
+    const List<List<double>> lookup = [
+      [12.7, 100], // Full Resting
+      [12.5, 90],
+      [12.42, 80],
+      [12.32, 70],
+      [12.20, 60],
+      [12.06, 50], // Nominal center
+      [11.90, 40],
+      [11.75, 30],
+      [11.58, 20],
+      [11.31, 10],
+      [10.50, 0],  // Danger zone
+    ];
+
+    // 4. Find where the current voltage fits in the table and interpolate
+    for (int i = 0; i < lookup.length - 1; i++) {
+      double highV = lookup[i][0];
+      double lowV = lookup[i + 1][0];
+
+      if (voltage <= highV && voltage > lowV) {
+        double highP = lookup[i][1];
+        double lowP = lookup[i + 1][1];
+
+        // Linear interpolation formula between these two specific points
+        // percentage = lowP + ( (voltage - lowV) * (highP - lowP) / (highV - lowV) )
+        return lowP + ((voltage - lowV) * (highP - lowP) / (highV - lowV));
+      }
+    }
+
+    return 0.0; // Fallback
+  }
+
+  void updateMap(int width, int height, List<int> data, double resolution) {
+    _mapWidth = width;
+    _mapHeight = height;
+    _mapData = data;
+    _mapResolution = resolution;
     notifyListeners();
   }
   

@@ -166,6 +166,14 @@ class RobotService {
           } else if (message["type"] == "general_data") {
             double level = (message['battery_level'] ?? 0.0).toDouble();
             _provider.updateBatteryLevel(level);
+          } else if (message["type"] == "occupancy_grid") {
+            int w = message['width'];
+            int h = message['height'];
+            // JSON arrays are technically dynamic, cast them to int
+            List<int> data = List<int>.from(message['data']);
+            double res = (message['resolution'] ?? 0.05).toDouble();
+
+            _provider.updateMap(w, h, data, res);
           }
         } catch (e) {
           print("[UDP-Listener] Erreur décodage: $e");

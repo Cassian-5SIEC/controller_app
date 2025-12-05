@@ -1,15 +1,17 @@
 // control_screen.dart
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_joystick/flutter_joystick.dart';
 import 'package:provider/provider.dart';
-import 'robot_provider.dart';
-import 'robot_service.dart';
-import 'settings_screen.dart';
 import 'package:flutter/services.dart';
 import 'package:toggle_switch/toggle_switch.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
-
 import 'package:flutter_gstreamer_player/flutter_gstreamer_player.dart';
+
+import 'robot_provider.dart';
+import 'robot_service.dart';
+import 'settings_screen.dart';
+import 'occupancy_map_widget.dart';
 
 class ControlScreen extends StatefulWidget {
   const ControlScreen({super.key});
@@ -20,42 +22,31 @@ class ControlScreen extends StatefulWidget {
 
 class _ControlScreenState extends State<ControlScreen> {
   late RobotService _robotService;
-
-  // Valeurs actuelles des Joysticks
   double _cmdLinear = 0.0;
   double _cmdAngular = 0.0;
-
-  int _modeIndex = 0; // 0: Manuel, 1: Auto, 2: Configuration
+  int _modeIndex = 0;
 
   @override
   void initState() {
     super.initState();
-    // Lie le service au provide
     _robotService = RobotService(context.read<RobotProvider>());
-    _connect(); // Tente la connexion au démarrage
+    _connect();
   }
 
   @override
   void dispose() {
-    _robotService.disconnect(); // Nettoie les connexions
+    _robotService.disconnect();
     super.dispose();
   }
 
   Future<void> _connect() async {
-    // 1. Démarrer l'écoute (le client doit écouter AVANT de s'enregistrer)
     await _robotService.startUdpListener();
-
-    // 2. S'enregistrer en TCP
     bool success = await _robotService.registerWithServer();
-
-    // 3. Si succès, démarrer l'envoi
     if (success) {
       _robotService.startCmdVelSender(() {
-        // Cette fonction fournit les dernières valeurs du joystick au service
         return {'linear': _cmdLinear, 'angular': _cmdAngular};
       });
     } else {
-      // Afficher une erreur
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text("Échec de l'enregistrement au serveur")),
@@ -66,23 +57,19 @@ class _ControlScreenState extends State<ControlScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Met l'app en plein écran immersif (cache la barre de statut)
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
-
-    // Observe les changements du provider
     final provider = context.watch<RobotProvider>();
 
     return Scaffold(
-      body: SafeArea(
-        // On utilise un Stack pour superposer les éléments
-        child: Stack(
-          children: [
-
-            // --- 0. Vidéo (Background) ---
-            Center(
-              child: AspectRatio(
-                aspectRatio: 4 / 3, // <-- set your desired aspect ratio here
-                child: GstPlayer(
+      backgroundColor: Colors.black,
+      body: Stack(
+        children: [
+          // --- 1. VIDEO BACKGROUND ---
+          Positioned.fill(
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                const GstPlayer(
                   pipeline: '''
 udpsrc port=5004 
 ! application/x-rtp,media=video,clock-rate=90000,encoding-name=H264,payload=96 
@@ -94,198 +81,286 @@ udpsrc port=5004
 ! appsink name=sink sync=false
 ''',
                 ),
-              ),
+                // Gradient for text readability
+                Container(
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        Colors.black87,
+                        Colors.transparent,
+                        Colors.transparent,
+                        Colors.black87,
+                      ],
+                      stops: [0.0, 0.2, 0.7, 1.0],
+                    ),
+                  ),
+                ),
+              ],
             ),
+          ),
 
-            // --- 1. Contenu principal (Joysticks et Odom) ---
-            Column(
+          // --- 2. HUD INTERFACE ---
+          SafeArea(
+            child: Column(
               children: [
-                // --- Section Odométrie ---
+                // === TOP BAR ===
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(16.0, 40.0, 16.0, 16.0),
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
                   child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _buildOdomDisplay("Speed", provider.odomLinearX),
-                      _buildOdomDisplay("Direction", provider.odomAngularZ),
-                      _buildOdomDisplay("Battery Level", provider.batteryLevel)
+                      // Status Badge
+                      Column(
+                        children: [
+                          _buildConnectionBadge(provider.isConnected),
+                          const SizedBox(height: 10),
+                          IconButton(
+                            icon: const Icon(Icons.settings, color: Colors.white70),
+                            onPressed: () async {
+                              SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+                              await Navigator.push(
+                                context,
+                                MaterialPageRoute(builder: (context) => const SettingsScreen()),
+                              );
+                              _robotService.disconnect();
+                              _connect();
+                            },
+                          ),
+                        ],
+                      ),
+
+                      const Spacer(),
+
+                      // Data Display
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: Colors.black45,
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: Colors.white10),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            _buildOdomItem(Icons.speed, "${provider.odomLinearX.toStringAsFixed(2)} m/s"),
+                            const SizedBox(width: 12),
+                            Container(width: 1, height: 15, color: Colors.white24),
+                            const SizedBox(width: 12),
+                            _buildOdomItem(Icons.battery_std, "${provider.batteryLevel}%",
+                                color: provider.batteryLevel < 20 ? Colors.red : Colors.green),
+                          ],
+                        ),
+                      ),
+
+                      const Spacer(),
+
+                      // Map Widget (Top Right)
+                      Container(
+                        width: 120,
+                        height: 120,
+                        decoration: BoxDecoration(
+                          color: Colors.black87,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.white24),
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: const OccupancyMapWidget(),
+                        ),
+                      ),
                     ],
                   ),
                 ),
 
-                // --- Section Joysticks ---
-                Expanded(
+                const Spacer(),
+
+                // === BOTTOM CONTROLS ===
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    crossAxisAlignment: CrossAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
+                      // --- Left Joystick ---
+                      Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Text("THROTTLE", style: TextStyle(color: Colors.white38, fontSize: 10)),
+                          const SizedBox(height: 8),
+                          Joystick(
+                            mode: JoystickMode.vertical,
+                            listener: (details) {
+                              setState(() => _cmdLinear = -details.y);
+                            },
+                            // Custom Base
+                            base: Container(
+                              width: 130,
+                              height: 130,
+                              decoration: BoxDecoration(
+                                color: Colors.white10,
+                                shape: BoxShape.circle,
+                                border: Border.all(color: Colors.white30, width: 2),
+                              ),
+                            ),
+                            // Custom Stick
+                            stick: Container(
+                              width: 50,
+                              height: 50,
+                              decoration: BoxDecoration(
+                                color: Colors.cyan.withOpacity(0.8),
+                                shape: BoxShape.circle,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.cyan.withOpacity(0.4),
+                                    blurRadius: 10,
+                                    spreadRadius: 2,
+                                  )
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
 
-                      // --- Joystick Gauche (Linéaire) ---
+                      // --- Center Console ---
                       Padding(
-                        padding: const EdgeInsets.only(left: 32.0),
-                        child: Joystick(
-                          mode: JoystickMode.vertical,
-                          listener: (details) {
-                            setState(() {
-                              _cmdLinear = -details.y;
-                            });
-                          },
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            ToggleSwitch(
+                              initialLabelIndex: _modeIndex,
+                              minWidth: 40.0,
+                              minHeight: 30.0,
+                              cornerRadius: 20.0,
+                              activeBgColors: const [[Colors.cyan], [Colors.orange], [Colors.purple]],
+                              activeFgColor: Colors.white,
+                              inactiveBgColor: Colors.grey.shade800,
+                              inactiveFgColor: Colors.white54,
+                              totalSwitches: 3,
+                              icons: const [FontAwesomeIcons.gamepad, FontAwesomeIcons.robot, FontAwesomeIcons.sliders],
+                              onToggle: (index) {
+                                setState(() => _modeIndex = index ?? 0);
+                                _robotService.setMode(index ?? 0);
+                              },
+                            ),
+                            const SizedBox(height: 20),
+                            Row(
+                              children: [
+                                _buildCircleBtn(Colors.green, Icons.play_arrow, () {
+                                  setState(() { _cmdLinear = 0; _cmdAngular = 0; });
+                                  _robotService.sendStart();
+                                }),
+                                const SizedBox(width: 20),
+                                _buildCircleBtn(Colors.red, Icons.stop, () {
+                                  setState(() { _cmdLinear = 0; _cmdAngular = 0; });
+                                  _robotService.sendImmediateStop();
+                                }, isBig: true),
+                              ],
+                            ),
+                          ],
                         ),
                       ),
 
-                      // --- Joystick Droit (Angulaire) ---
-                      Padding(
-                        padding: const EdgeInsets.only(right: 32.0),
-                        child: Joystick(
-                          mode: JoystickMode.horizontal,
-                          listener: (details) {
-                            setState(() {
-                              _cmdAngular = details.x;
-                            });
-                          },
-                        ),
+                      // --- Right Joystick ---
+                      Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Text("STEERING", style: TextStyle(color: Colors.white38, fontSize: 10)),
+                          const SizedBox(height: 8),
+                          Joystick(
+                            mode: JoystickMode.horizontal,
+                            listener: (details) {
+                              setState(() => _cmdAngular = -details.x);
+                            },
+                            base: Container(
+                              width: 130,
+                              height: 130,
+                              decoration: BoxDecoration(
+                                color: Colors.white10,
+                                shape: BoxShape.circle,
+                                border: Border.all(color: Colors.white30, width: 2),
+                              ),
+                            ),
+                            stick: Container(
+                              width: 50,
+                              height: 50,
+                              decoration: BoxDecoration(
+                                color: Colors.purpleAccent.withOpacity(0.8),
+                                shape: BoxShape.circle,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.purpleAccent.withOpacity(0.4),
+                                    blurRadius: 10,
+                                    spreadRadius: 2,
+                                  )
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
                 ),
               ],
             ),
+          ),
+        ],
+      ),
+    );
+  }
 
-            // --- 2. Bouton Paramètres (flottant en haut à droite) ---
-            Positioned(
-              top: 10,
-              right: 10,
-              child: IconButton(
-                icon: const Icon(Icons.settings, color: Colors.black54),
-                iconSize: 30,
-                onPressed: () async {
-                  SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
-                  await Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (context) => const SettingsScreen()),
-                  );
-                  _robotService.disconnect();
-                  _connect();
-                },
-              ),
-            ),
-
-            // --- 3. Indicateur de Connexion (flottant en haut à gauche) ---
-            Positioned(
-              top: 20,
-              left: 20,
-              child: Container(
-                width: 15,
-                height: 15,
-                decoration: BoxDecoration(
-                  color: provider.isConnected ? Colors.green : Colors.red,
-                  shape: BoxShape.circle,
-                  border: Border.all(color: Colors.white, width: 2),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.5),
-                      blurRadius: 4,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
-            // --- NOUVEAU : Panneau de contrôle central (Start, Stop, Mode) ---
-            Positioned(
-              bottom: 20, // Positionné en bas
-              left: 0,    // Centré horizontalement
-              right: 0,
-              child: Column( // Empile le switch et les boutons
-                mainAxisSize: MainAxisSize.min, // Prend la hauteur minimale
-                children: [
-                  // --- Switch de mode ---
-                  ToggleSwitch(
-                    initialLabelIndex: _modeIndex,
-                    customWidths: [50.0, 50.0, 50.0],
-                    cornerRadius: 2.0,
-                    activeBgColors: [[Colors.cyan], [Colors.cyan], [Colors.cyan]],
-                    activeFgColor: Colors.white,
-                    inactiveBgColor: Colors.grey,
-                    inactiveFgColor: Colors.white,
-                    totalSwitches: 3,
-                    labels: ['', '', ''],
-                    icons: [FontAwesomeIcons.user, FontAwesomeIcons.robot, FontAwesomeIcons.gear],
-                    onToggle: (index) {
-                      print('switched to: $index');
-                      setState(() {
-                        _modeIndex = index ?? 0;
-                      });
-                      _robotService.setMode(index ?? 0);
-                    },
-                  ),
-
-                  const SizedBox(height: 15), // Espace entre le switch et les boutons
-
-                  // --- Rangée pour les boutons Start/Stop ---
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      // --- Bouton de démarrage ---
-                      ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.green,
-                          shape: const CircleBorder(),
-                          padding: const EdgeInsets.all(15),
-                          minimumSize: const Size(70, 70), // Taille augmentée
-                        ),
-                        onPressed: () {
-                          setState(() {
-                            _cmdLinear = 0.0;
-                            _cmdAngular = 0.0;
-                          });
-                          _robotService.sendStart();
-                        },
-                        child: const Icon(Icons.play_arrow, color: Colors.white, size: 30),
-                      ),
-
-                      const SizedBox(width: 30), // Espace entre les boutons
-
-                      // --- Bouton d'arret d'urgence ---
-                      ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.red,
-                          shape: const CircleBorder(),
-                          padding: const EdgeInsets.all(20),
-                          minimumSize: const Size(80, 80), // Taille principale
-                        ),
-                        onPressed: () {
-                          setState(() {
-                            _cmdLinear = 0.0;
-                            _cmdAngular = 0.0;
-                          });
-                          _robotService.sendImmediateStop();
-                        },
-                        child: const Icon(Icons.stop, color: Colors.white, size: 30),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-
-            // --- SUPPRIMÉ : Les anciens boutons Positioned (4, 5, 6) ont été
-            // ---           regroupés dans le panneau de contrôle ci-dessus.
-          ],
+  Widget _buildConnectionBadge(bool isConnected) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: isConnected ? Colors.green.withOpacity(0.2) : Colors.red.withOpacity(0.2),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: isConnected ? Colors.green : Colors.red),
+      ),
+      child: Text(
+        isConnected ? "CONNECTED" : "DISCONNECTED",
+        style: TextStyle(
+          color: isConnected ? Colors.greenAccent : Colors.redAccent,
+          fontSize: 10,
+          fontWeight: FontWeight.bold,
+          letterSpacing: 1.0,
         ),
       ),
     );
   }
 
-  Widget _buildOdomDisplay(String label, double value) {
-    return Column(
+  Widget _buildOdomItem(IconData icon, String value, {Color color = Colors.white}) {
+    return Row(
       children: [
-        Text(label, style: Theme.of(context).textTheme.titleMedium?.copyWith(color: Colors.black87)),
+        Icon(icon, size: 14, color: Colors.white70),
+        const SizedBox(width: 6),
         Text(
-          value.toStringAsFixed(2),
-          style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold, color: Colors.black),
+          value,
+          style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 13),
         ),
       ],
+    );
+  }
+
+  Widget _buildCircleBtn(Color color, IconData icon, VoidCallback onTap, {bool isBig = false}) {
+    return Material(
+      color: color,
+      shape: const CircleBorder(),
+      elevation: 6,
+      child: InkWell(
+        customBorder: const CircleBorder(),
+        onTap: onTap,
+        child: Container(
+          width: isBig ? 70 : 50,
+          height: isBig ? 70 : 50,
+          alignment: Alignment.center,
+          child: Icon(icon, color: Colors.white, size: isBig ? 32 : 24),
+        ),
+      ),
     );
   }
 }
