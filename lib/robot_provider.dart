@@ -52,7 +52,8 @@ class RobotProvider with ChangeNotifier {
 
   // Appelé par le service réseau lors de la réception d'un paquet
   void updateOdometry(double linearX, double angularZ) {
-    _odomLinearX = linearX;
+    const double epsilon = 5e-2; // or any small value
+    _odomLinearX = (linearX.abs() < epsilon) ? 0.0 : linearX + 0.0;
     _odomAngularZ = angularZ;
     notifyListeners();
   }

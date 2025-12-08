@@ -148,7 +148,7 @@ udpsrc port=5004
                             const SizedBox(width: 12),
                             Container(width: 1, height: 15, color: Colors.white24),
                             const SizedBox(width: 12),
-                            _buildOdomItem(Icons.battery_std, "${provider.batteryLevel}%",
+                            _buildOdomItem(Icons.battery_std, "${provider.batteryLevel.toInt()}%",
                                 color: provider.batteryLevel < 20 ? Colors.red : Colors.green),
                           ],
                         ),
