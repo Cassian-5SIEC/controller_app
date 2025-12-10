@@ -1,5 +1,6 @@
 // control_screen.dart
 import 'dart:ui';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_joystick/flutter_joystick.dart';
 import 'package:provider/provider.dart';
@@ -12,6 +13,21 @@ import 'robot_provider.dart';
 import 'robot_service.dart';
 import 'settings_screen.dart';
 import 'occupancy_map_widget.dart';
+
+// --- 1. Notification Model ---
+class HudNotification {
+  final String id;
+  final String message;
+  final IconData icon;
+  final Color color;
+
+  HudNotification({
+    required this.id,
+    required this.message,
+    required this.icon,
+    required this.color,
+  });
+}
 
 class ControlScreen extends StatefulWidget {
   const ControlScreen({super.key});
@@ -26,10 +42,23 @@ class _ControlScreenState extends State<ControlScreen> {
   double _cmdAngular = 0.0;
   int _modeIndex = 0;
 
+  StreamSubscription? _notifSubscription;
+
+  // --- 2. Notification State ---
+  final List<HudNotification> _notifications = [];
+  final GlobalKey<AnimatedListState> _listKey = GlobalKey<AnimatedListState>();
+
   @override
   void initState() {
     super.initState();
     _robotService = RobotService(context.read<RobotProvider>());
+    final provider = context.read<RobotProvider>();
+    _notifSubscription = provider.notificationStream.listen((event) {
+      // When a signal comes in, trigger the UI logic
+      if (mounted) {
+        _showNotification(event.message, isError: event.isError);
+      }
+    });
     _connect();
   }
 
@@ -39,18 +68,102 @@ class _ControlScreenState extends State<ControlScreen> {
     super.dispose();
   }
 
+  // --- 3. Notification Logic ---
+  void _showNotification(String message, {bool isError = false}) {
+    final id = DateTime.now().microsecondsSinceEpoch.toString();
+    final notification = HudNotification(
+      id: id,
+      message: message,
+      icon: isError ? Icons.warning_amber_rounded : Icons.check_circle_outline,
+      color: isError ? Colors.redAccent : Colors.green,
+    );
+
+    setState(() {
+      _notifications.insert(0, notification);
+      _listKey.currentState?.insertItem(0, duration: const Duration(milliseconds: 300));
+    });
+
+    // Auto dismiss after 5 seconds
+    Future.delayed(const Duration(seconds: 5), () {
+      if (mounted) {
+        _removeNotification(id);
+      }
+    });
+  }
+
+  void _removeNotification(String id) {
+    final index = _notifications.indexWhere((element) => element.id == id);
+    if (index >= 0) {
+      final removedItem = _notifications[index];
+      setState(() {
+        _notifications.removeAt(index);
+        _listKey.currentState?.removeItem(
+          index,
+              (context, animation) => _buildNotificationItem(removedItem, animation),
+          duration: const Duration(milliseconds: 300),
+        );
+      });
+    }
+  }
+
+  // --- 4. Notification Widget Builder ---
+  Widget _buildNotificationItem(HudNotification item, Animation<double> animation) {
+    return SizeTransition(
+      sizeFactor: animation,
+      child: FadeTransition(
+        opacity: animation,
+        child: Padding(
+          padding: const EdgeInsets.only(bottom: 8.0),
+          child: Container(
+            // Fixed width helps keep the stack tidy on the right side
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: Colors.black87,
+              borderRadius: BorderRadius.circular(8),
+              border: Border(left: BorderSide(color: item.color, width: 4)),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.5),
+                  blurRadius: 10,
+                  offset: const Offset(2, 2),
+                )
+              ],
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(item.icon, color: item.color, size: 20),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    item.message,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<void> _connect() async {
     await _robotService.startUdpListener();
     bool success = await _robotService.registerWithServer();
     if (success) {
+      _showNotification("Connected to Robot Server");
       _robotService.startCmdVelSender(() {
         return {'linear': _cmdLinear, 'angular': _cmdAngular};
       });
     } else {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Échec de l'enregistrement au serveur")),
-        );
+        _showNotification("Failed to connect to server", isError: true);
       }
     }
   }
@@ -244,6 +357,7 @@ udpsrc port=5004
                               onToggle: (index) {
                                 setState(() => _modeIndex = index ?? 0);
                                 _robotService.setMode(index ?? 0);
+                                _showNotification("Mode switched: ${index == 0 ? 'Manual' : index == 1 ? 'Auto' : 'Calibration'}");
                               },
                             ),
                             const SizedBox(height: 20),
@@ -252,11 +366,13 @@ udpsrc port=5004
                                 _buildCircleBtn(Colors.green, Icons.play_arrow, () {
                                   setState(() { _cmdLinear = 0; _cmdAngular = 0; });
                                   _robotService.sendStart();
+                                  _showNotification("Robot Started");
                                 }),
                                 const SizedBox(width: 20),
                                 _buildCircleBtn(Colors.red, Icons.stop, () {
                                   setState(() { _cmdLinear = 0; _cmdAngular = 0; });
                                   _robotService.sendImmediateStop();
+                                  _showNotification("Emergency Stop", isError: true);
                                 }, isBig: true),
                               ],
                             ),
@@ -306,6 +422,23 @@ udpsrc port=5004
                   ),
                 ),
               ],
+            ),
+          ),
+
+          // --- 5. NOTIFICATION STACK OVERLAY ---
+          Positioned(
+            top: 150, // Starts below the Map Widget (which is approx 130-140px tall with padding)
+            right: 16,
+            bottom: 200, // Leave enough space so it doesn't overlap joystick area
+            child: SizedBox(
+              width: 260,
+              child: AnimatedList(
+                key: _listKey,
+                initialItemCount: _notifications.length,
+                itemBuilder: (context, index, animation) {
+                  return _buildNotificationItem(_notifications[index], animation);
+                },
+              ),
             ),
           ),
         ],

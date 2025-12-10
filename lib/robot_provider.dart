@@ -1,5 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:async'; // Don't forget this import
+
+// 1. Define a simple helper class for the event
+class NotificationEvent {
+  final String message;
+  final bool isError;
+  NotificationEvent(this.message, {this.isError = false});
+}
 
 class RobotProvider with ChangeNotifier {
   // --- Configuration (avec valeurs par défaut)
@@ -39,7 +47,17 @@ class RobotProvider with ChangeNotifier {
   double get odomAngularZ => _odomAngularZ;
   double get batteryLevel => _batteryLevel;
 
+  // Notifications
+  final _notificationController = StreamController<NotificationEvent>.broadcast();
+
+  // 3. Expose the stream (The UI will listen to this)
+  Stream<NotificationEvent> get notificationStream => _notificationController.stream;
+
   // --- Actions (appelées par le service réseau ou l'UI)
+
+  void showNotification(String message, {bool isError = false}) {
+    _notificationController.add(NotificationEvent(message, isError: isError));
+  }
 
   void setConnectionStatus(bool connected) {
     _isConnected = connected;
@@ -58,6 +76,7 @@ class RobotProvider with ChangeNotifier {
     notifyListeners();
   }
 
+  bool hasBeenNotifyLowBattery = false;
   void updateBatteryLevel(double voltage) {
     // Convert the raw voltage to a percentage using lead-acid curve
     double newPercentage = _getLeadAcidPercentage(voltage);
@@ -65,6 +84,15 @@ class RobotProvider with ChangeNotifier {
     // Optional: Add simple smoothing (low-pass filter) to prevent UI flickering
     // if the voltage fluctuates rapidly due to motor spikes.
     // _batteryLevel = (_batteryLevel * 0.8) + (newPercentage * 0.2);
+
+    if (newPercentage < 20 && !hasBeenNotifyLowBattery) {
+      showNotification("Battery Low", isError: true);
+      hasBeenNotifyLowBattery = true;
+    }
+
+    if (newPercentage > 90){
+      hasBeenNotifyLowBattery = false;
+    }
 
     _batteryLevel = newPercentage;
     notifyListeners();
@@ -149,5 +177,11 @@ class RobotProvider with ChangeNotifier {
     
     notifyListeners();
     print("Réglages sauvegardés");
+  }
+
+  @override
+  void dispose(){
+    _notificationController.close();
+    super.dispose();
   }
 }
