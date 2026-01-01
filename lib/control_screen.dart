@@ -1,4 +1,3 @@
-// control_screen.dart
 import 'dart:ui';
 import 'dart:async';
 import 'package:flutter/material.dart';
@@ -8,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:toggle_switch/toggle_switch.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:flutter_gstreamer_player/flutter_gstreamer_player.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'robot_provider.dart';
 import 'robot_service.dart';
@@ -44,22 +44,114 @@ class _ControlScreenState extends State<ControlScreen> {
 
   StreamSubscription? _notifSubscription;
 
-  // --- 2. Notification State ---
+  // --- Notification State ---
   final List<HudNotification> _notifications = [];
   final GlobalKey<AnimatedListState> _listKey = GlobalKey<AnimatedListState>();
+
+  // --- Movable Elements State ---
+  bool _isEditMode = false;
+  Map<String, Offset> _elementPositions = {};
+  Map<String, double> _elementScales = {};
+
+  // Default positions (relative to screen size, will be calculated on first build or reset)
+  // We use immediate values for now, but will adjust slightly in build if needed or load from prefs
 
   @override
   void initState() {
     super.initState();
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     _robotService = RobotService(context.read<RobotProvider>());
     final provider = context.read<RobotProvider>();
     _notifSubscription = provider.notificationStream.listen((event) {
-      // When a signal comes in, trigger the UI logic
       if (mounted) {
         _showNotification(event.message, isError: event.isError);
       }
     });
     _connect();
+    _loadPositions();
+  }
+
+  Future<void> _loadPositions() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _elementPositions = {
+        'topLeft': Offset(
+          prefs.getDouble('pos_topLeft_dx') ?? 16.0,
+          prefs.getDouble('pos_topLeft_dy') ?? 16.0,
+        ),
+        'topCenter': Offset(
+          prefs.getDouble('pos_topCenter_dx') ?? 300.0, // approximates
+          prefs.getDouble('pos_topCenter_dy') ?? 16.0,
+        ),
+        'topRight': Offset(
+          prefs.getDouble('pos_topRight_dx') ?? 650.0, // approximates
+          prefs.getDouble('pos_topRight_dy') ?? 16.0,
+        ),
+        'bottomLeft': Offset(
+          prefs.getDouble('pos_bottomLeft_dx') ?? 20.0,
+          prefs.getDouble('pos_bottomLeft_dy') ?? 250.0, // approximates
+        ),
+        'bottomCenter': Offset(
+          prefs.getDouble('pos_bottomCenter_dx') ?? 300.0, // approximates
+          prefs.getDouble('pos_bottomCenter_dy') ?? 280.0, // approximates
+        ),
+        'bottomRight': Offset(
+          prefs.getDouble('pos_bottomRight_dx') ?? 650.0, // approximates
+          prefs.getDouble('pos_bottomRight_dy') ?? 250.0, // approximates
+        ),
+        'notifications': Offset(
+          prefs.getDouble('pos_notifications_dx') ??
+              600.0, // Default to right side
+          prefs.getDouble('pos_notifications_dy') ?? 150.0,
+        ),
+      };
+
+      _elementScales = {
+        'topLeft': prefs.getDouble('scale_topLeft') ?? 1.0,
+        'topCenter': prefs.getDouble('scale_topCenter') ?? 1.0,
+        'topRight': prefs.getDouble('scale_topRight') ?? 1.0,
+        'bottomLeft': prefs.getDouble('scale_bottomLeft') ?? 1.0,
+        'bottomCenter': prefs.getDouble('scale_bottomCenter') ?? 1.0,
+        'bottomRight': prefs.getDouble('scale_bottomRight') ?? 1.0,
+        'notifications': prefs.getDouble('scale_notifications') ?? 1.0,
+      };
+    });
+  }
+
+  Future<void> _savePositions() async {
+    final prefs = await SharedPreferences.getInstance();
+    _elementPositions.forEach((key, offset) {
+      prefs.setDouble('pos_${key}_dx', offset.dx);
+      prefs.setDouble('pos_${key}_dy', offset.dy);
+    });
+    _elementScales.forEach((key, scale) {
+      prefs.setDouble('scale_$key', scale);
+    });
+  }
+
+  void _resetPositions(Size screenSize) {
+    // Defines responsive defaults based on current screen size
+    setState(() {
+      _elementPositions['topLeft'] = const Offset(16, 16);
+      _elementPositions['topCenter'] = Offset(screenSize.width / 2 - 100, 16);
+      _elementPositions['topRight'] = Offset(screenSize.width - 136, 16);
+
+      _elementPositions['bottomLeft'] = Offset(20, screenSize.height - 180);
+      _elementPositions['bottomCenter'] = Offset(
+        screenSize.width / 2 - 100,
+        screenSize.height - 160,
+      );
+      _elementPositions['bottomRight'] = Offset(
+        screenSize.width - 150,
+        screenSize.height - 180,
+      );
+
+      _elementPositions['notifications'] = Offset(screenSize.width - 280, 150);
+
+      // Reset scales to 1.0
+      _elementScales.updateAll((key, value) => 1.0);
+    });
+    _savePositions();
   }
 
   @override
@@ -68,7 +160,7 @@ class _ControlScreenState extends State<ControlScreen> {
     super.dispose();
   }
 
-  // --- 3. Notification Logic ---
+  // --- Notification Logic ---
   void _showNotification(String message, {bool isError = false}) {
     final id = DateTime.now().microsecondsSinceEpoch.toString();
     final notification = HudNotification(
@@ -80,10 +172,12 @@ class _ControlScreenState extends State<ControlScreen> {
 
     setState(() {
       _notifications.insert(0, notification);
-      _listKey.currentState?.insertItem(0, duration: const Duration(milliseconds: 300));
+      _listKey.currentState?.insertItem(
+        0,
+        duration: const Duration(milliseconds: 300),
+      );
     });
 
-    // Auto dismiss after 5 seconds
     Future.delayed(const Duration(seconds: 5), () {
       if (mounted) {
         _removeNotification(id);
@@ -99,15 +193,18 @@ class _ControlScreenState extends State<ControlScreen> {
         _notifications.removeAt(index);
         _listKey.currentState?.removeItem(
           index,
-              (context, animation) => _buildNotificationItem(removedItem, animation),
+          (context, animation) =>
+              _buildNotificationItem(removedItem, animation),
           duration: const Duration(milliseconds: 300),
         );
       });
     }
   }
 
-  // --- 4. Notification Widget Builder ---
-  Widget _buildNotificationItem(HudNotification item, Animation<double> animation) {
+  Widget _buildNotificationItem(
+    HudNotification item,
+    Animation<double> animation,
+  ) {
     return SizeTransition(
       sizeFactor: animation,
       child: FadeTransition(
@@ -115,7 +212,6 @@ class _ControlScreenState extends State<ControlScreen> {
         child: Padding(
           padding: const EdgeInsets.only(bottom: 8.0),
           child: Container(
-            // Fixed width helps keep the stack tidy on the right side
             width: double.infinity,
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
@@ -127,7 +223,7 @@ class _ControlScreenState extends State<ControlScreen> {
                   color: Colors.black.withOpacity(0.5),
                   blurRadius: 10,
                   offset: const Offset(2, 2),
-                )
+                ),
               ],
             ),
             child: Row(
@@ -170,8 +266,36 @@ class _ControlScreenState extends State<ControlScreen> {
 
   @override
   Widget build(BuildContext context) {
-    SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
     final provider = context.watch<RobotProvider>();
+    final size = MediaQuery.of(context).size;
+
+    // Initialize defaults if empty (first run)
+    if (_elementPositions.isEmpty) {
+      // Defer to next frame to ensure size is valid if needed,
+      // but here we can just do it synchronously for simplicity in build if maps are empty
+      _elementPositions['topLeft'] = const Offset(16, 16);
+      _elementPositions['topCenter'] = Offset(size.width / 2 - 100, 16);
+      _elementPositions['topRight'] = Offset(size.width - 136, 16);
+      _elementPositions['bottomLeft'] = Offset(20, size.height - 180);
+      _elementPositions['bottomCenter'] = Offset(
+        size.width / 2 - 100,
+        size.height - 160,
+      );
+      _elementPositions['bottomRight'] = Offset(
+        size.width - 150,
+        size.height - 180,
+      );
+      _elementPositions['notifications'] = Offset(size.width - 280, 150);
+    }
+
+    // Ensure scales are initialized
+    _elementScales.putIfAbsent('topLeft', () => 1.0);
+    _elementScales.putIfAbsent('topCenter', () => 1.0);
+    _elementScales.putIfAbsent('topRight', () => 1.0);
+    _elementScales.putIfAbsent('bottomLeft', () => 1.0);
+    _elementScales.putIfAbsent('bottomCenter', () => 1.0);
+    _elementScales.putIfAbsent('bottomRight', () => 1.0);
+    _elementScales.putIfAbsent('notifications', () => 1.0);
 
     return Scaffold(
       backgroundColor: Colors.black,
@@ -194,7 +318,6 @@ udpsrc port=5004
 ! appsink name=sink sync=false
 ''',
                 ),
-                // Gradient for text readability
                 Container(
                   decoration: const BoxDecoration(
                     gradient: LinearGradient(
@@ -214,211 +337,284 @@ udpsrc port=5004
             ),
           ),
 
-          // --- 2. HUD INTERFACE ---
-          SafeArea(
+          // --- 2. MOVABLE HUD ELEMENTS ---
+
+          // Top Left: Status & Settings
+          _buildDraggableElement(
+            id: 'topLeft',
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
-                // === TOP BAR ===
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Status Badge
-                      Column(
-                        children: [
-                          _buildConnectionBadge(provider.isConnected),
-                          const SizedBox(height: 10),
-                          IconButton(
-                            icon: const Icon(Icons.settings, color: Colors.white70),
-                            onPressed: () async {
-                              SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
-                              await Navigator.push(
-                                context,
-                                MaterialPageRoute(builder: (context) => const SettingsScreen()),
-                              );
-                              _robotService.disconnect();
-                              _connect();
-                            },
+                _buildConnectionBadge(provider.isConnected),
+                const SizedBox(height: 10),
+                IconButton(
+                  icon: const Icon(Icons.settings, color: Colors.white70),
+                  onPressed: _isEditMode
+                      ? null
+                      : () async {
+                          SystemChrome.setEnabledSystemUIMode(
+                            SystemUiMode.edgeToEdge,
+                          );
+                          await Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const SettingsScreen(),
+                            ),
+                          );
+                          _robotService.disconnect();
+                          _connect();
+                        },
+                ),
+              ],
+            ),
+          ),
+
+          // Top Center: Data Display
+          _buildDraggableElement(
+            id: 'topCenter',
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: Colors.black45,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: Colors.white10),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _buildOdomItem(
+                    Icons.speed,
+                    "${provider.odomLinearX.toStringAsFixed(2)} m/s",
+                  ),
+                  const SizedBox(width: 12),
+                  Container(width: 1, height: 15, color: Colors.white24),
+                  const SizedBox(width: 12),
+                  _buildOdomItem(
+                    Icons.battery_std,
+                    "${provider.batteryLevel.toInt()}%",
+                    color: provider.batteryLevel < 20
+                        ? Colors.red
+                        : Colors.green,
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          // Top Right: Map
+          _buildDraggableElement(
+            id: 'topRight',
+            child: Container(
+              width: 120,
+              height: 120,
+              decoration: BoxDecoration(
+                color: Colors.black87,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.white24),
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: const OccupancyMapWidget(),
+              ),
+            ),
+          ),
+
+          // Bottom Left: Throttle Joystick
+          _buildDraggableElement(
+            id: 'bottomLeft',
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  "THROTTLE",
+                  style: TextStyle(color: Colors.white38, fontSize: 10),
+                ),
+                const SizedBox(height: 8),
+                IgnorePointer(
+                  ignoring: _isEditMode,
+                  child: Joystick(
+                    mode: JoystickMode.vertical,
+                    listener: (details) {
+                      setState(() => _cmdLinear = -details.y);
+                    },
+                    base: Container(
+                      width: 130,
+                      height: 130,
+                      decoration: BoxDecoration(
+                        color: Colors.white10,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white30, width: 2),
+                      ),
+                    ),
+                    stick: Container(
+                      width: 50,
+                      height: 50,
+                      decoration: BoxDecoration(
+                        color: Colors.cyan.withOpacity(0.8),
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.cyan.withOpacity(0.4),
+                            blurRadius: 10,
+                            spreadRadius: 2,
                           ),
                         ],
                       ),
-
-                      const Spacer(),
-
-                      // Data Display
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: Colors.black45,
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: Colors.white10),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            _buildOdomItem(Icons.speed, "${provider.odomLinearX.toStringAsFixed(2)} m/s"),
-                            const SizedBox(width: 12),
-                            Container(width: 1, height: 15, color: Colors.white24),
-                            const SizedBox(width: 12),
-                            _buildOdomItem(Icons.battery_std, "${provider.batteryLevel.toInt()}%",
-                                color: provider.batteryLevel < 20 ? Colors.red : Colors.green),
-                          ],
-                        ),
-                      ),
-
-                      const Spacer(),
-
-                      // Map Widget (Top Right)
-                      Container(
-                        width: 120,
-                        height: 120,
-                        decoration: BoxDecoration(
-                          color: Colors.black87,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: Colors.white24),
-                        ),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(12),
-                          child: const OccupancyMapWidget(),
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
                 ),
+              ],
+            ),
+          ),
 
-                const Spacer(),
+          // Bottom Center: Console
+          _buildDraggableElement(
+            id: 'bottomCenter',
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ToggleSwitch(
+                  initialLabelIndex: _modeIndex,
+                  minWidth: 40.0,
+                  minHeight: 30.0,
+                  cornerRadius: 20.0,
+                  activeBgColors: const [
+                    [Colors.cyan],
+                    [Colors.orange],
+                    [Colors.purple],
+                  ],
+                  activeFgColor: Colors.white,
+                  inactiveBgColor: Colors.grey.shade800,
+                  inactiveFgColor: Colors.white54,
+                  totalSwitches: 3,
+                  icons: const [
+                    FontAwesomeIcons.gamepad,
+                    FontAwesomeIcons.robot,
+                    FontAwesomeIcons.sliders,
+                  ],
+                  onToggle: (index) {
+                    if (_isEditMode) return;
+                    setState(() => _modeIndex = index ?? 0);
+                    _robotService.setMode(index ?? 0);
+                    _showNotification(
+                      "Mode switched: ${index == 0
+                          ? 'Manual'
+                          : index == 1
+                          ? 'Auto'
+                          : 'Calibration'}",
+                    );
+                  },
+                ),
+                const SizedBox(height: 20),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _buildCircleBtn(Colors.green, Icons.play_arrow, () {
+                      if (_isEditMode) return;
+                      setState(() {
+                        _cmdLinear = 0;
+                        _cmdAngular = 0;
+                      });
+                      _robotService.sendStart();
+                      _showNotification("Robot Started");
+                    }),
+                    const SizedBox(width: 20),
+                    _buildCircleBtn(Colors.red, Icons.stop, () {
+                      if (_isEditMode) return;
+                      setState(() {
+                        _cmdLinear = 0;
+                        _cmdAngular = 0;
+                      });
+                      _robotService.sendImmediateStop();
+                      _showNotification("Emergency Stop", isError: true);
+                    }, isBig: true),
+                  ],
+                ),
+                // Edit Button
+                const SizedBox(height: 10),
+                GestureDetector(
+                  onTap: () {
+                    setState(() {
+                      _isEditMode = !_isEditMode;
+                      if (!_isEditMode) {
+                        _savePositions();
+                        _showNotification("Layout Saved");
+                      } else {
+                        _showNotification(
+                          "Edit Mode: Drag elements to move, +/- to scale",
+                        );
+                      }
+                    });
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: _isEditMode
+                          ? Colors.yellowAccent
+                          : Colors.transparent,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: Colors.white24),
+                    ),
+                    child: Text(
+                      _isEditMode ? "DONE" : "EDIT UI",
+                      style: TextStyle(
+                        color: _isEditMode ? Colors.black : Colors.white54,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
 
-                // === BOTTOM CONTROLS ===
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      // --- Left Joystick ---
-                      Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Text("THROTTLE", style: TextStyle(color: Colors.white38, fontSize: 10)),
-                          const SizedBox(height: 8),
-                          Joystick(
-                            mode: JoystickMode.vertical,
-                            listener: (details) {
-                              setState(() => _cmdLinear = -details.y);
-                            },
-                            // Custom Base
-                            base: Container(
-                              width: 130,
-                              height: 130,
-                              decoration: BoxDecoration(
-                                color: Colors.white10,
-                                shape: BoxShape.circle,
-                                border: Border.all(color: Colors.white30, width: 2),
-                              ),
-                            ),
-                            // Custom Stick
-                            stick: Container(
-                              width: 50,
-                              height: 50,
-                              decoration: BoxDecoration(
-                                color: Colors.cyan.withOpacity(0.8),
-                                shape: BoxShape.circle,
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.cyan.withOpacity(0.4),
-                                    blurRadius: 10,
-                                    spreadRadius: 2,
-                                  )
-                                ],
-                              ),
-                            ),
+          // Bottom Right: Steering Joystick
+          _buildDraggableElement(
+            id: 'bottomRight',
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  "STEERING",
+                  style: TextStyle(color: Colors.white38, fontSize: 10),
+                ),
+                const SizedBox(height: 8),
+                IgnorePointer(
+                  ignoring: _isEditMode,
+                  child: Joystick(
+                    mode: JoystickMode.horizontal,
+                    listener: (details) {
+                      setState(() => _cmdAngular = -details.x);
+                    },
+                    base: Container(
+                      width: 130,
+                      height: 130,
+                      decoration: BoxDecoration(
+                        color: Colors.white10,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white30, width: 2),
+                      ),
+                    ),
+                    stick: Container(
+                      width: 50,
+                      height: 50,
+                      decoration: BoxDecoration(
+                        color: Colors.purpleAccent.withOpacity(0.8),
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.purpleAccent.withOpacity(0.4),
+                            blurRadius: 10,
+                            spreadRadius: 2,
                           ),
                         ],
                       ),
-
-                      // --- Center Console ---
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 10),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            ToggleSwitch(
-                              initialLabelIndex: _modeIndex,
-                              minWidth: 40.0,
-                              minHeight: 30.0,
-                              cornerRadius: 20.0,
-                              activeBgColors: const [[Colors.cyan], [Colors.orange], [Colors.purple]],
-                              activeFgColor: Colors.white,
-                              inactiveBgColor: Colors.grey.shade800,
-                              inactiveFgColor: Colors.white54,
-                              totalSwitches: 3,
-                              icons: const [FontAwesomeIcons.gamepad, FontAwesomeIcons.robot, FontAwesomeIcons.sliders],
-                              onToggle: (index) {
-                                setState(() => _modeIndex = index ?? 0);
-                                _robotService.setMode(index ?? 0);
-                                _showNotification("Mode switched: ${index == 0 ? 'Manual' : index == 1 ? 'Auto' : 'Calibration'}");
-                              },
-                            ),
-                            const SizedBox(height: 20),
-                            Row(
-                              children: [
-                                _buildCircleBtn(Colors.green, Icons.play_arrow, () {
-                                  setState(() { _cmdLinear = 0; _cmdAngular = 0; });
-                                  _robotService.sendStart();
-                                  _showNotification("Robot Started");
-                                }),
-                                const SizedBox(width: 20),
-                                _buildCircleBtn(Colors.red, Icons.stop, () {
-                                  setState(() { _cmdLinear = 0; _cmdAngular = 0; });
-                                  _robotService.sendImmediateStop();
-                                  _showNotification("Emergency Stop", isError: true);
-                                }, isBig: true),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-
-                      // --- Right Joystick ---
-                      Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Text("STEERING", style: TextStyle(color: Colors.white38, fontSize: 10)),
-                          const SizedBox(height: 8),
-                          Joystick(
-                            mode: JoystickMode.horizontal,
-                            listener: (details) {
-                              setState(() => _cmdAngular = -details.x);
-                            },
-                            base: Container(
-                              width: 130,
-                              height: 130,
-                              decoration: BoxDecoration(
-                                color: Colors.white10,
-                                shape: BoxShape.circle,
-                                border: Border.all(color: Colors.white30, width: 2),
-                              ),
-                            ),
-                            stick: Container(
-                              width: 50,
-                              height: 50,
-                              decoration: BoxDecoration(
-                                color: Colors.purpleAccent.withOpacity(0.8),
-                                shape: BoxShape.circle,
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.purpleAccent.withOpacity(0.4),
-                                    blurRadius: 10,
-                                    spreadRadius: 2,
-                                  )
-                                ],
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
+                    ),
                   ),
                 ),
               ],
@@ -426,22 +622,139 @@ udpsrc port=5004
           ),
 
           // --- 5. NOTIFICATION STACK OVERLAY ---
-          Positioned(
-            top: 150, // Starts below the Map Widget (which is approx 130-140px tall with padding)
-            right: 16,
-            bottom: 200, // Leave enough space so it doesn't overlap joystick area
+          // Now wrapped in draggable element
+          _buildDraggableElement(
+            id: 'notifications',
             child: SizedBox(
               width: 260,
+              height: 300,
               child: AnimatedList(
                 key: _listKey,
                 initialItemCount: _notifications.length,
                 itemBuilder: (context, index, animation) {
-                  return _buildNotificationItem(_notifications[index], animation);
+                  return _buildNotificationItem(
+                    _notifications[index],
+                    animation,
+                  );
                 },
               ),
             ),
           ),
+
+          if (_isEditMode)
+            Positioned(
+              top: 40,
+              left: 0,
+              right: 0,
+              child: Center(
+                child: ElevatedButton(
+                  onPressed: () => _resetPositions(size),
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                  child: const Text(
+                    "Reset Layout",
+                    style: TextStyle(color: Colors.white),
+                  ),
+                ),
+              ),
+            ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildDraggableElement({required String id, required Widget child}) {
+    final position = _elementPositions[id] ?? const Offset(0, 0);
+    final scale = _elementScales[id] ?? 1.0;
+
+    // While dragging, we update position directly.
+    return Positioned(
+      left: position.dx,
+      top: position.dy,
+      child: GestureDetector(
+        onPanUpdate: _isEditMode
+            ? (details) {
+                setState(() {
+                  final newPos = _elementPositions[id]! + details.delta;
+                  _elementPositions[id] = newPos;
+                });
+              }
+            : null,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            // The Scaled Widget
+            Transform.scale(
+              scale: scale,
+              child: Container(
+                decoration: _isEditMode
+                    ? BoxDecoration(
+                        border: Border.all(
+                          color: Colors.yellowAccent,
+                          width: 2 / scale,
+                          style: BorderStyle.solid,
+                        ),
+                        color: Colors.black38,
+                        borderRadius: BorderRadius.circular(8),
+                      )
+                    : null,
+                padding: _isEditMode
+                    ? const EdgeInsets.all(8)
+                    : EdgeInsets.zero,
+                child: child,
+              ),
+            ),
+
+            // Scaling Controls
+            if (_isEditMode)
+              Positioned(
+                top: -15,
+                right: -15,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _buildScaleBtn(Icons.remove, () {
+                      setState(() {
+                        double s = _elementScales[id] ?? 1.0;
+                        s = (s - 0.1).clamp(0.5, 3.0);
+                        _elementScales[id] = s;
+                      });
+                    }),
+                    const SizedBox(width: 4),
+                    _buildScaleBtn(Icons.add, () {
+                      setState(() {
+                        double s = _elementScales[id] ?? 1.0;
+                        s = (s + 0.1).clamp(0.5, 3.0);
+                        _elementScales[id] = s;
+                      });
+                    }),
+                  ],
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildScaleBtn(IconData icon, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 30,
+        height: 30,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          shape: BoxShape.circle,
+          border: Border.all(color: Colors.black54),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black45,
+              blurRadius: 2,
+              offset: Offset(1, 1),
+            ),
+          ],
+        ),
+        child: Icon(icon, size: 16, color: Colors.black),
       ),
     );
   }
@@ -450,7 +763,9 @@ udpsrc port=5004
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
-        color: isConnected ? Colors.green.withOpacity(0.2) : Colors.red.withOpacity(0.2),
+        color: isConnected
+            ? Colors.green.withOpacity(0.2)
+            : Colors.red.withOpacity(0.2),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: isConnected ? Colors.green : Colors.red),
       ),
@@ -466,20 +781,33 @@ udpsrc port=5004
     );
   }
 
-  Widget _buildOdomItem(IconData icon, String value, {Color color = Colors.white}) {
+  Widget _buildOdomItem(
+    IconData icon,
+    String value, {
+    Color color = Colors.white,
+  }) {
     return Row(
       children: [
         Icon(icon, size: 14, color: Colors.white70),
         const SizedBox(width: 6),
         Text(
           value,
-          style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 13),
+          style: TextStyle(
+            color: color,
+            fontWeight: FontWeight.bold,
+            fontSize: 13,
+          ),
         ),
       ],
     );
   }
 
-  Widget _buildCircleBtn(Color color, IconData icon, VoidCallback onTap, {bool isBig = false}) {
+  Widget _buildCircleBtn(
+    Color color,
+    IconData icon,
+    VoidCallback onTap, {
+    bool isBig = false,
+  }) {
     return Material(
       color: color,
       shape: const CircleBorder(),
