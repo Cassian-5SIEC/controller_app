@@ -81,6 +81,20 @@ class RobotService {
               } catch (e) {
                 print('[TCP] Erreur en envoyant heartbeat_ack: $e');
               }
+            } else if (msg['type'] == 'cmd') {
+              if (msg['cmd'] == 'start'){
+                _provider.showNotification("Start Received");
+              } else if (msg['cmd'] == 'stop'){
+                _provider.showNotification("Stop Received");
+              } else if (msg['cmd'] == 'set_mode'){
+                if (msg['mode'] == 0) {
+                  _provider.showNotification("Manual Mode");
+                } else if (msg['mode'] == 1) {
+                  _provider.showNotification("Auto Mode");
+                } else if (msg['mode'] == 2) {
+                  _provider.showNotification("Calibration Mode");
+                }
+              }
             } else {
               print('[TCP] Message reçu du serveur: $msg');
             }

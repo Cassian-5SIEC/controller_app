@@ -12,7 +12,12 @@ class OccupancyMapWidget extends StatelessWidget {
         if (provider.mapData.isEmpty) {
           return Container(
             color: Colors.black12,
-            child: const Center(child: Text("Waiting for Map...", style: TextStyle(color: Colors.white))),
+            child: const Center(
+              child: Text(
+                "Waiting for Map...",
+                style: TextStyle(color: Colors.white),
+              ),
+            ),
           );
         }
 
@@ -82,7 +87,8 @@ class MapPainter extends CustomPainter {
         } else if (value >= 0 && value <= 50) {
           // Free space - usually we leave it transparent to see the video behind
           // or draw it white/green
-          paint.color = Colors.green.withOpacity(0.2);
+          // CHANGED: From green to white/grey
+          paint.color = Colors.white.withOpacity(0.2);
           canvas.drawRect(
             Rect.fromLTWH(x * cellWidth, y * cellHeight, cellWidth, cellHeight),
             paint,
@@ -90,6 +96,31 @@ class MapPainter extends CustomPainter {
         }
       }
     }
+
+    // --- Draw Car Icon ---
+    _drawCar(canvas, size.width / 2, size.height / 2, size.width * 0.1);
+  }
+
+  void _drawCar(Canvas canvas, double x, double y, double size) {
+    final paint = Paint()
+      ..color = Colors.red
+      ..style = PaintingStyle.fill;
+
+    // Draw a simple triangle pointing up
+    final path = Path();
+    path.moveTo(x, y - size / 2); // Top
+    path.lineTo(x - size / 2, y + size / 2); // Bottom Left
+    path.lineTo(x + size / 2, y + size / 2); // Bottom Right
+    path.close();
+
+    canvas.drawPath(path, paint);
+
+    // Optional: Add a border
+    final borderPaint = Paint()
+      ..color = Colors.white
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2;
+    canvas.drawPath(path, borderPaint);
   }
 
   @override

@@ -39,7 +39,21 @@ app.*.symbols
 # Obfuscation related
 app.*.map.json
 
+
 # Android Studio will place build artifacts here
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+
+# Added by Agent
+/android/build/
+/android/gst-android-build/
+/android/Run
+/android/src/
+devtools_options.yaml
+**/local.properties
+**/ephemeral/
+**/ios/Flutter/Generated.xcconfig
+**/ios/Flutter/flutter_export_environment.sh
+**/ios/Runner/GeneratedPluginRegistrant.*
