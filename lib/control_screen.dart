@@ -362,6 +362,9 @@ udpsrc port=5004
                               builder: (context) => const SettingsScreen(),
                             ),
                           );
+                          SystemChrome.setEnabledSystemUIMode(
+                            SystemUiMode.immersiveSticky,
+                          );
                           _robotService.disconnect();
                           _connect();
                         },

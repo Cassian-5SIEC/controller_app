@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import 'robot_provider.dart';
 import 'control_screen.dart';
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+  SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
   runApp(
     // Initialisation du Provider au sommet de l'arbre des widgets
     ChangeNotifierProvider(
@@ -23,10 +26,7 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'Robot Controller',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        primarySwatch: Colors.blue,
-        useMaterial3: true,
-      ),
+      theme: ThemeData(primarySwatch: Colors.blue, useMaterial3: true),
       // On définit ControlScreen comme écran d'accueil
       home: const ControlScreen(),
     );
