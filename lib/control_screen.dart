@@ -306,18 +306,25 @@ class _ControlScreenState extends State<ControlScreen> {
             child: Stack(
               fit: StackFit.expand,
               children: [
-                const GstPlayer(
-                  pipeline: '''
-udpsrc port=5004 
-! application/x-rtp,media=video,clock-rate=90000,encoding-name=H264,payload=96 
+                if (provider.tcpVideoPort != null)
+                  GstPlayer(
+                    key: ValueKey(provider.tcpVideoPort),
+                    pipeline:
+                        '''
+tcpclientsrc host=${provider.serverIP} port=${provider.tcpVideoPort} 
+! application/x-rtp-stream,encoding-name=H264 
+! rtpstreamdepay 
 ! rtph264depay 
-! h264parse 
 ! decodebin 
 ! videoconvert 
 ! video/x-raw,format=RGBA 
-! appsink name=sink sync=false
+! appsink name=sink sync=false 
+max-lateness=10000000 
+common-timestamp=true 
 ''',
-                ),
+                  )
+                else
+                  Container(color: const Color.fromARGB(255, 255, 186, 186)),
                 Container(
                   decoration: const BoxDecoration(
                     gradient: LinearGradient(

@@ -15,9 +15,10 @@ class RobotProvider with ChangeNotifier {
   int _tcpControlPort = 5001;
   String _clientID = "controller";
   int _clientRecvUdpPort = 6006;
-  
+
   // Port UDP du serveur (obtenu après enregistrement)
   int? _serverUdpDataPort;
+  int? _tcpVideoPort;
 
   // --- État en temps réel
   bool _isConnected = false;
@@ -42,16 +43,19 @@ class RobotProvider with ChangeNotifier {
   String get clientID => _clientID;
   int get clientRecvUdpPort => _clientRecvUdpPort;
   int? get serverUdpDataPort => _serverUdpDataPort;
+  int? get tcpVideoPort => _tcpVideoPort;
   bool get isConnected => _isConnected;
   double get odomLinearX => _odomLinearX;
   double get odomAngularZ => _odomAngularZ;
   double get batteryLevel => _batteryLevel;
 
   // Notifications
-  final _notificationController = StreamController<NotificationEvent>.broadcast();
+  final _notificationController =
+      StreamController<NotificationEvent>.broadcast();
 
   // 3. Expose the stream (The UI will listen to this)
-  Stream<NotificationEvent> get notificationStream => _notificationController.stream;
+  Stream<NotificationEvent> get notificationStream =>
+      _notificationController.stream;
 
   // --- Actions (appelées par le service réseau ou l'UI)
 
@@ -61,11 +65,19 @@ class RobotProvider with ChangeNotifier {
 
   void setConnectionStatus(bool connected) {
     _isConnected = connected;
+    if (!connected) {
+      _tcpVideoPort = null;
+    }
     notifyListeners();
   }
 
   void setServerUdpPort(int port) {
     _serverUdpDataPort = port;
+  }
+
+  void setTcpVideoPort(int port) {
+    _tcpVideoPort = port;
+    notifyListeners();
   }
 
   // Appelé par le service réseau lors de la réception d'un paquet
@@ -90,7 +102,7 @@ class RobotProvider with ChangeNotifier {
       hasBeenNotifyLowBattery = true;
     }
 
-    if (newPercentage > 90){
+    if (newPercentage > 90) {
       hasBeenNotifyLowBattery = false;
     }
 
@@ -121,7 +133,7 @@ class RobotProvider with ChangeNotifier {
       [11.75, 30],
       [11.58, 20],
       [11.31, 10],
-      [10.50, 0],  // Danger zone
+      [10.50, 0], // Danger zone
     ];
 
     // 4. Find where the current voltage fits in the table and interpolate
@@ -149,38 +161,44 @@ class RobotProvider with ChangeNotifier {
     _mapResolution = resolution;
     notifyListeners();
   }
-  
+
   // --- Persistance (Sauvegarde & Chargement)
-  
+
   // À appeler au démarrage de l'app
   Future<void> loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
     _serverIP = prefs.getString('serverIP') ?? _serverIP;
     _tcpControlPort = prefs.getInt('tcpControlPort') ?? _tcpControlPort;
     _clientID = prefs.getString('clientID') ?? _clientID;
-    _clientRecvUdpPort = prefs.getInt('clientRecvUdpPort') ?? _clientRecvUdpPort;
+    _clientRecvUdpPort =
+        prefs.getInt('clientRecvUdpPort') ?? _clientRecvUdpPort;
     notifyListeners();
   }
 
   // Appelé depuis l'écran de réglages
-  Future<void> saveSettings(String ip, int tcpPort, String id, int clientUdp) async {
+  Future<void> saveSettings(
+    String ip,
+    int tcpPort,
+    String id,
+    int clientUdp,
+  ) async {
     _serverIP = ip;
     _tcpControlPort = tcpPort;
     _clientID = id;
     _clientRecvUdpPort = clientUdp;
-    
+
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('serverIP', _serverIP);
     await prefs.setInt('tcpControlPort', _tcpControlPort);
     await prefs.setString('clientID', _clientID);
     await prefs.setInt('clientRecvUdpPort', _clientRecvUdpPort);
-    
+
     notifyListeners();
     print("Réglages sauvegardés");
   }
 
   @override
-  void dispose(){
+  void dispose() {
     _notificationController.close();
     super.dispose();
   }
