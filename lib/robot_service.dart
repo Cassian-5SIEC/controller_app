@@ -202,8 +202,9 @@ class RobotService {
             // JSON arrays are technically dynamic, cast them to int
             List<int> data = List<int>.from(message['data']);
             double res = (message['resolution'] ?? 0.05).toDouble();
+            double carYaw = (message['car_yaw'] ?? 0.0).toDouble();
 
-            _provider.updateMap(w, h, data, res);
+            _provider.updateMap(w, h, data, res, carYaw);
           }
         } catch (e) {
           print("[UDP-Listener] Erreur décodage: $e");

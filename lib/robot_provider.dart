@@ -30,11 +30,13 @@ class RobotProvider with ChangeNotifier {
   int _mapWidth = 0;
   int _mapHeight = 0;
   double _mapResolution = 0.05;
+  double _mapCarYaw = 0.0;
 
   List<int> get mapData => _mapData;
   int get mapWidth => _mapWidth;
   int get mapHeight => _mapHeight;
   double get mapResolution => _mapResolution;
+  double get mapCarYaw => _mapCarYaw;
 
   // --- Getters (pour l'UI)
   String get serverIP => _serverIP;
@@ -152,11 +154,18 @@ class RobotProvider with ChangeNotifier {
     return 0.0; // Fallback
   }
 
-  void updateMap(int width, int height, List<int> data, double resolution) {
+  void updateMap(
+    int width,
+    int height,
+    List<int> data,
+    double resolution,
+    double carYaw,
+  ) {
     _mapWidth = width;
     _mapHeight = height;
     _mapData = data;
     _mapResolution = resolution;
+    _mapCarYaw = carYaw;
     notifyListeners();
   }
 

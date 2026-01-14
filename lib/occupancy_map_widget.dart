@@ -28,6 +28,7 @@ class OccupancyMapWidget extends StatelessWidget {
               width: provider.mapWidth,
               height: provider.mapHeight,
               data: provider.mapData,
+              carYaw: provider.mapCarYaw,
             ),
             // Ensure the widget takes up available space but maintains aspect ratio if needed
             child: Container(),
@@ -42,8 +43,14 @@ class MapPainter extends CustomPainter {
   final int width;
   final int height;
   final List<int> data;
+  final double carYaw;
 
-  MapPainter({required this.width, required this.height, required this.data});
+  MapPainter({
+    required this.width,
+    required this.height,
+    required this.data,
+    required this.carYaw,
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -98,19 +105,26 @@ class MapPainter extends CustomPainter {
     }
 
     // --- Draw Car Icon ---
-    _drawCar(canvas, size.width / 2, size.height / 2, size.width * 0.1);
+    _drawCar(canvas, size.width / 2, size.height / 2, size.width * 0.1, carYaw);
   }
 
-  void _drawCar(Canvas canvas, double x, double y, double size) {
+  void _drawCar(Canvas canvas, double x, double y, double size, double yaw) {
+    canvas.save();
+    canvas.translate(x, y);
+    canvas.rotate(
+      -yaw,
+    ); // Rotation en radians (inversée pour correspondre au sens trigo/horaire)
+
+    // Le dessin se fait maintenant autour de (0,0)
     final paint = Paint()
       ..color = Colors.red
       ..style = PaintingStyle.fill;
 
     // Draw a simple triangle pointing up
     final path = Path();
-    path.moveTo(x, y - size / 2); // Top
-    path.lineTo(x - size / 2, y + size / 2); // Bottom Left
-    path.lineTo(x + size / 2, y + size / 2); // Bottom Right
+    path.moveTo(0, -size / 2); // Top (relative to 0,0)
+    path.lineTo(-size / 2, size / 2); // Bottom Left
+    path.lineTo(size / 2, size / 2); // Bottom Right
     path.close();
 
     canvas.drawPath(path, paint);
@@ -121,11 +135,13 @@ class MapPainter extends CustomPainter {
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2;
     canvas.drawPath(path, borderPaint);
+
+    canvas.restore();
   }
 
   @override
   bool shouldRepaint(covariant MapPainter oldDelegate) {
-    // Only repaint if the data changes
-    return oldDelegate.data != data;
+    // Repaint if data or yaw changes
+    return oldDelegate.data != data || oldDelegate.carYaw != carYaw;
   }
 }
