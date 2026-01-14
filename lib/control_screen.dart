@@ -411,6 +411,10 @@ udpsrc port=5004
                         ? Colors.red
                         : Colors.green,
                   ),
+                  const SizedBox(width: 12),
+                  Container(width: 1, height: 15, color: Colors.white24),
+                  const SizedBox(width: 12),
+                  _buildOdomItem(Icons.bolt, "120 W"),
                 ],
               ),
             ),
@@ -866,7 +870,7 @@ udpsrc port=5004
         mainAxisSize: MainAxisSize.min,
         children: [
           const Icon(
-            FontAwesomeIcons.truckPickup,
+            Icons.precision_manufacturing,
             color: Colors.orangeAccent,
             size: 40,
           ),
