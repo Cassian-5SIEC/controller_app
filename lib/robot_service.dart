@@ -19,7 +19,9 @@ class RobotService {
 
   // --- Étape 1: Enregistrement TCP ---
   Future<bool> registerWithServer() async {
-    print("[TCP] Connexion à ${_provider.serverIP}:${_provider.tcpControlPort}...");
+    print(
+      "[TCP] Connexion à ${_provider.serverIP}:${_provider.tcpControlPort}...",
+    );
     try {
       Socket socket = await Socket.connect(
         _provider.serverIP,
@@ -48,72 +50,85 @@ class RobotService {
       final completer = Completer<Map<String, dynamic>>();
 
       _tcpListener = _tcpSocket!
-          .cast<List<int>>()          // <-- this is the key part
+          .cast<List<int>>() // <-- this is the key part
           .transform(utf8.decoder)
           .transform(const LineSplitter())
-          .listen((data) {
-        try {
-          final decoded = json.decode(data);
-          // Assure que c'est un map
-          Map<String, dynamic> msg;
-          try {
-            msg = Map<String, dynamic>.from(decoded);
-          } catch (e) {
-            // Si ce n'est pas un objet JSON, on skip
-            print('[TCP] Message non-objet reçu: $decoded');
-            if (!completer.isCompleted) completer.completeError(StateError('Invalid registration response'));
-            return;
-          }
-
-          if (!completer.isCompleted) {
-            // Première réponse : utilisée pour l'enregistrement
-            completer.complete(msg);
-          } else {
-            // Messages TCP suivants
-            // Si le serveur envoie un heartbeat, on renvoie un ack
-            final type = msg['type'];
-            if (type == 'heartbeat') {
+          .listen(
+            (data) {
               try {
-                final ack = json.encode({'type': 'heartbeat_ack'});
-                _tcpSocket?.write(ack);
-                _tcpSocket?.flush();
-                print('[TCP] Heartbeat reçu - ack envoyé');
-              } catch (e) {
-                print('[TCP] Erreur en envoyant heartbeat_ack: $e');
-              }
-            } else if (msg['type'] == 'cmd') {
-              if (msg['cmd'] == 'start'){
-                _provider.showNotification("Start Received");
-              } else if (msg['cmd'] == 'stop'){
-                _provider.showNotification("Stop Received");
-              } else if (msg['cmd'] == 'set_mode'){
-                if (msg['mode'] == 0) {
-                  _provider.showNotification("Manual Mode");
-                } else if (msg['mode'] == 1) {
-                  _provider.showNotification("Auto Mode");
-                } else if (msg['mode'] == 2) {
-                  _provider.showNotification("Calibration Mode");
+                final decoded = json.decode(data);
+                // Assure que c'est un map
+                Map<String, dynamic> msg;
+                try {
+                  msg = Map<String, dynamic>.from(decoded);
+                } catch (e) {
+                  // Si ce n'est pas un objet JSON, on skip
+                  print('[TCP] Message non-objet reçu: $decoded');
+                  if (!completer.isCompleted)
+                    completer.completeError(
+                      StateError('Invalid registration response'),
+                    );
+                  return;
                 }
+
+                if (!completer.isCompleted) {
+                  // Première réponse : utilisée pour l'enregistrement
+                  completer.complete(msg);
+                } else {
+                  // Messages TCP suivants
+                  // Si le serveur envoie un heartbeat, on renvoie un ack
+                  final type = msg['type'];
+                  if (type == 'heartbeat') {
+                    try {
+                      final ack = json.encode({'type': 'heartbeat_ack'});
+                      _tcpSocket?.write(ack);
+                      _tcpSocket?.flush();
+                      print('[TCP] Heartbeat reçu - ack envoyé');
+                    } catch (e) {
+                      print('[TCP] Erreur en envoyant heartbeat_ack: $e');
+                    }
+                  } else if (msg['type'] == 'cmd') {
+                    if (msg['cmd'] == 'start') {
+                      _provider.showNotification("Start Received");
+                    } else if (msg['cmd'] == 'stop') {
+                      _provider.showNotification("Stop Received");
+                    } else if (msg['cmd'] == 'set_mode') {
+                      if (msg['mode'] == 0) {
+                        _provider.showNotification("Manual Mode");
+                      } else if (msg['mode'] == 1) {
+                        _provider.showNotification("Auto Mode");
+                      } else if (msg['mode'] == 2) {
+                        _provider.showNotification("Calibration Mode");
+                      }
+                    }
+                  } else if (msg['type'] == 'ask-pickup') {
+                    print('[TCP] Demande de pickup reçue');
+                    _provider.setPickupRequested(true);
+                  } else {
+                    print('[TCP] Message reçu du serveur: $msg');
+                  }
+                }
+              } catch (e) {
+                print('[TCP] Erreur décodage message TCP: $e');
+                if (!completer.isCompleted) completer.completeError(e);
               }
-            } else {
-              print('[TCP] Message reçu du serveur: $msg');
-            }
-          }
-        } catch (e) {
-          print('[TCP] Erreur décodage message TCP: $e');
-          if (!completer.isCompleted) completer.completeError(e);
-        }
-      }, onError: (e) {
-        print('[TCP] Erreur socket: $e');
-        if (!completer.isCompleted) completer.completeError(e);
-      }, onDone: () {
-        print('[TCP] Socket fermée par le serveur');
-        _provider.setConnectionStatus(false);
-        _tcpSocket = null;
-        if (!completer.isCompleted) {
-          completer.completeError(StateError('Socket closed before response'));
-        }
-      }, cancelOnError: true);
+            },
+            onError: (e) {
+              print('[TCP] Erreur socket: $e');
+              if (!completer.isCompleted) completer.completeError(e);
+            },
+            onDone: () {
+              print('[TCP] Socket fermée par le serveur');
+              _provider.setConnectionStatus(false);
+              _tcpSocket = null;
+              if (!completer.isCompleted) {
+                completer.completeError(
+                  StateError('Socket closed before response'),
+                );
+              }
+            },
+            cancelOnError: true,
+          );
 
       // Attend la première réponse (timeout raisonnable)
       Map<String, dynamic> response;
@@ -134,7 +149,7 @@ class RobotService {
       }
 
       // --- AVEC LES CORRECTIONS DU .get() ---
-      if (response["ok"] == true) { 
+      if (response["ok"] == true) {
         final port = response["udp_data_port"];
         if (port != null) {
           _provider.setServerUdpPort(port);
@@ -143,13 +158,12 @@ class RobotService {
           return true;
         }
       }
-      print("[TCP] Échec de l'enregistrement: ${response['error']}"); 
+      print("[TCP] Échec de l'enregistrement: ${response['error']}");
       // Si l'enregistrement a échoué, on ferme la socket car elle n'est pas utile
       try {
         socket.destroy();
       } catch (_) {}
       return false;
-
     } catch (e) {
       print("[TCP] Échec de connexion: $e");
       _provider.setConnectionStatus(false);
@@ -160,13 +174,15 @@ class RobotService {
   // --- Étape 2: Démarrer l'écoute UDP (Serveur -> Client) ---
   Future<void> startUdpListener() async {
     print("[UDP-Listener] Démarrage sur port ${_provider.clientRecvUdpPort}");
-    
+
     // Annule l'écoute précédente si elle existe
     await _udpListenerSubscription?.cancel();
 
     try {
-      var receiver = await UDP.bind(Endpoint.any(port: Port(_provider.clientRecvUdpPort)));
-      
+      var receiver = await UDP.bind(
+        Endpoint.any(port: Port(_provider.clientRecvUdpPort)),
+      );
+
       _udpListenerSubscription = receiver.asStream().listen((datagram) {
         if (datagram == null) return;
         try {
@@ -174,7 +190,7 @@ class RobotService {
           if (message["type"] == "real_vel") {
             double lx = (message['linear_x'] ?? 0.0).toDouble();
             double az = (message['angular_z'] ?? 0.0).toDouble();
-            
+
             // Met à jour le provider (ce qui mettra à jour l'UI)
             _provider.updateOdometry(lx, az);
           } else if (message["type"] == "general_data") {
@@ -193,10 +209,9 @@ class RobotService {
           print("[UDP-Listener] Erreur décodage: $e");
         }
       });
-
     } catch (e) {
-       print("[UDP-Listener] Échec du bind: $e");
-       // Gérer l'erreur, par ex. port déjà utilisé
+      print("[UDP-Listener] Échec du bind: $e");
+      // Gérer l'erreur, par ex. port déjà utilisé
     }
   }
 
@@ -209,7 +224,7 @@ class RobotService {
 
     // Arrête le timer précédent s'il existe
     _cmdVelTimer?.cancel();
-    
+
     // Crée le socket d'envoi
     _udpSender = await UDP.bind(Endpoint.any());
     final serverEndpoint = Endpoint.unicast(
@@ -224,13 +239,13 @@ class RobotService {
       if (!_provider.isConnected) return; // N'envoie rien si déconnecté
 
       // Récupère les dernières commandes (via la fonction passée en paramètre)
-      final cmd = getCmdVel(); 
+      final cmd = getCmdVel();
 
       final cmdVelMsg = {
         "client_id": _provider.clientID,
         "type": "cmd_vel",
         "linear_x": cmd['linear'],
-        "angular_z": cmd['angular']
+        "angular_z": cmd['angular'],
       };
 
       try {
@@ -245,10 +260,7 @@ class RobotService {
   // --- Envoi d'une commande d'arrêt immédiate via TCP pour assurer l'arrêt ---
   void sendImmediateStop() {
     print("[TCP] Envoi d'une commande d'arrêt immédiate.");
-    final stopMsg = {
-      "type": "emergency_stop",
-      "client_id": _provider.clientID
-    };
+    final stopMsg = {"type": "emergency_stop", "client_id": _provider.clientID};
 
     if (_tcpSocket != null) {
       try {
@@ -262,30 +274,29 @@ class RobotService {
 
     // Si pas de socket persistante, on ouvre une connexion éphémère
     Socket.connect(
-      _provider.serverIP,
-      _provider.tcpControlPort,
-      timeout: const Duration(seconds: 5),
-    ).then((socket) {
-      try {
-        socket.write(json.encode(stopMsg));
-        socket.flush().then((_) => socket.destroy());
-      } catch (e) {
-        print("[TCP] Erreur en envoyant stop (connexion éphémère): $e");
-        try {
-          socket.destroy();
-        } catch (_) {}
-      }
-    }).catchError((e) {
-      print("[TCP] Échec de connexion pour l'arrêt immédiat: $e");
-    });
+          _provider.serverIP,
+          _provider.tcpControlPort,
+          timeout: const Duration(seconds: 5),
+        )
+        .then((socket) {
+          try {
+            socket.write(json.encode(stopMsg));
+            socket.flush().then((_) => socket.destroy());
+          } catch (e) {
+            print("[TCP] Erreur en envoyant stop (connexion éphémère): $e");
+            try {
+              socket.destroy();
+            } catch (_) {}
+          }
+        })
+        .catchError((e) {
+          print("[TCP] Échec de connexion pour l'arrêt immédiat: $e");
+        });
   }
 
   void sendStart() {
     print("[TCP] Envoi d'une commande de démarrage.");
-    final startMsg = {
-      "type": "start",
-      "client_id": _provider.clientID
-    };
+    final startMsg = {"type": "start", "client_id": _provider.clientID};
 
     if (_tcpSocket != null) {
       try {
@@ -299,22 +310,24 @@ class RobotService {
 
     // Si pas de socket persistante, on ouvre une connexion éphémère
     Socket.connect(
-      _provider.serverIP,
-      _provider.tcpControlPort,
-      timeout: const Duration(seconds: 5),
-    ).then((socket) {
-      try {
-        socket.write(json.encode(startMsg));
-        socket.flush().then((_) => socket.destroy());
-      } catch (e) {
-        print("[TCP] Erreur en envoyant start (connexion éphémère): $e");
-        try {
-          socket.destroy();
-        } catch (_) {}
-      }
-    }).catchError((e) {
-      print("[TCP] Échec de connexion pour le démarrage: $e");
-    });
+          _provider.serverIP,
+          _provider.tcpControlPort,
+          timeout: const Duration(seconds: 5),
+        )
+        .then((socket) {
+          try {
+            socket.write(json.encode(startMsg));
+            socket.flush().then((_) => socket.destroy());
+          } catch (e) {
+            print("[TCP] Erreur en envoyant start (connexion éphémère): $e");
+            try {
+              socket.destroy();
+            } catch (_) {}
+          }
+        })
+        .catchError((e) {
+          print("[TCP] Échec de connexion pour le démarrage: $e");
+        });
   }
 
   void setMode(int modeIndex) {
@@ -322,7 +335,7 @@ class RobotService {
     final modeMsg = {
       "type": "set_mode",
       "client_id": _provider.clientID,
-      "mode": modeIndex
+      "mode": modeIndex,
     };
 
     if (_tcpSocket != null) {
@@ -337,22 +350,45 @@ class RobotService {
 
     // Si pas de socket persistante, on ouvre une connexion éphémère
     Socket.connect(
-      _provider.serverIP,
-      _provider.tcpControlPort,
-      timeout: const Duration(seconds: 5),
-    ).then((socket) {
+          _provider.serverIP,
+          _provider.tcpControlPort,
+          timeout: const Duration(seconds: 5),
+        )
+        .then((socket) {
+          try {
+            socket.write(json.encode(modeMsg));
+            socket.flush().then((_) => socket.destroy());
+          } catch (e) {
+            print("[TCP] Erreur en envoyant set_mode (connexion éphémère): $e");
+            try {
+              socket.destroy();
+            } catch (_) {}
+          }
+        })
+        .catchError((e) {
+          print("[TCP] Échec de connexion pour le changement de mode: $e");
+        });
+  }
+
+  void sendPickupResponse(bool accepted) {
+    print("[TCP] Envoi réponse pickup: $accepted");
+    final respMsg = {
+      "type": "response-pickup",
+      "client_id": _provider.clientID,
+      "response": accepted,
+    };
+
+    if (_tcpSocket != null) {
       try {
-        socket.write(json.encode(modeMsg));
-        socket.flush().then((_) => socket.destroy());
+        _tcpSocket!.write(json.encode(respMsg));
+        _tcpSocket!.flush();
       } catch (e) {
-        print("[TCP] Erreur en envoyant set_mode (connexion éphémère): $e");
-        try {
-          socket.destroy();
-        } catch (_) {}
+        print("[TCP] Erreur en envoyant response-pickup: $e");
       }
-    }).catchError((e) {
-      print("[TCP] Échec de connexion pour le changement de mode: $e");
-    });
+    } else {
+      // Fallback éphémère si needed, mais normalement on est connecté
+      print("[TCP] Erreur: Pas de connexion pour envoyer response-pickup");
+    }
   }
 
   // --- Nettoyage ---

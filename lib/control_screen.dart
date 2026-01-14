@@ -104,6 +104,10 @@ class _ControlScreenState extends State<ControlScreen> {
               600.0, // Default to right side
           prefs.getDouble('pos_notifications_dy') ?? 150.0,
         ),
+        'pickupPopup': Offset(
+          prefs.getDouble('pos_pickupPopup_dx') ?? 400.0,
+          prefs.getDouble('pos_pickupPopup_dy') ?? 300.0,
+        ),
       };
 
       _elementScales = {
@@ -114,6 +118,7 @@ class _ControlScreenState extends State<ControlScreen> {
         'bottomCenter': prefs.getDouble('scale_bottomCenter') ?? 1.0,
         'bottomRight': prefs.getDouble('scale_bottomRight') ?? 1.0,
         'notifications': prefs.getDouble('scale_notifications') ?? 1.0,
+        'pickupPopup': prefs.getDouble('scale_pickupPopup') ?? 1.0,
       };
     });
   }
@@ -147,6 +152,10 @@ class _ControlScreenState extends State<ControlScreen> {
       );
 
       _elementPositions['notifications'] = Offset(screenSize.width - 280, 150);
+      _elementPositions['pickupPopup'] = Offset(
+        screenSize.width / 2 - 150,
+        screenSize.height / 2 - 100,
+      );
 
       // Reset scales to 1.0
       _elementScales.updateAll((key, value) => 1.0);
@@ -295,7 +304,9 @@ class _ControlScreenState extends State<ControlScreen> {
     _elementScales.putIfAbsent('bottomLeft', () => 1.0);
     _elementScales.putIfAbsent('bottomCenter', () => 1.0);
     _elementScales.putIfAbsent('bottomRight', () => 1.0);
+    _elementScales.putIfAbsent('bottomRight', () => 1.0);
     _elementScales.putIfAbsent('notifications', () => 1.0);
+    _elementScales.putIfAbsent('pickupPopup', () => 1.0);
 
     return Scaffold(
       backgroundColor: Colors.black,
@@ -644,6 +655,13 @@ udpsrc port=5004
             ),
           ),
 
+          // --- 6. PICKUP POPUP ---
+          if (provider.isPickupRequested || _isEditMode)
+            _buildDraggableElement(
+              id: 'pickupPopup',
+              child: _buildPickupPopup(provider),
+            ),
+
           if (_isEditMode)
             Positioned(
               top: 40,
@@ -823,6 +841,98 @@ udpsrc port=5004
           height: isBig ? 70 : 50,
           alignment: Alignment.center,
           child: Icon(icon, color: Colors.white, size: isBig ? 32 : 24),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPickupPopup(RobotProvider provider) {
+    return Container(
+      width: 300,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade900,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white24),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.5),
+            blurRadius: 15,
+            spreadRadius: 2,
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(
+            FontAwesomeIcons.truckPickup,
+            color: Colors.orangeAccent,
+            size: 40,
+          ),
+          const SizedBox(height: 16),
+          const Text(
+            "Pickup Request",
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            "Do you want to pickup the can?",
+            textAlign: TextAlign.center,
+            style: TextStyle(color: Colors.white70, fontSize: 14),
+          ),
+          const SizedBox(height: 20),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              _buildPopupButton(
+                label: "NO",
+                color: Colors.redAccent,
+                onPressed: () {
+                  if (_isEditMode) return;
+                  _robotService.sendPickupResponse(false);
+                  provider.setPickupRequested(false);
+                  _showNotification("Pickup Rejected", isError: true);
+                },
+              ),
+              _buildPopupButton(
+                label: "YES",
+                color: Colors.green,
+                onPressed: () {
+                  if (_isEditMode) return;
+                  _robotService.sendPickupResponse(true);
+                  provider.setPickupRequested(false);
+                  _showNotification("Pickup Accepted");
+                },
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPopupButton({
+    required String label,
+    required Color color,
+    required VoidCallback onPressed,
+  }) {
+    return ElevatedButton(
+      onPressed: onPressed,
+      style: ElevatedButton.styleFrom(
+        backgroundColor: color,
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+      child: Text(
+        label,
+        style: const TextStyle(
+          fontWeight: FontWeight.bold,
+          color: Colors.white,
         ),
       ),
     );

@@ -15,7 +15,7 @@ class RobotProvider with ChangeNotifier {
   int _tcpControlPort = 5001;
   String _clientID = "controller";
   int _clientRecvUdpPort = 6006;
-  
+
   // Port UDP du serveur (obtenu après enregistrement)
   int? _serverUdpDataPort;
 
@@ -48,12 +48,22 @@ class RobotProvider with ChangeNotifier {
   double get batteryLevel => _batteryLevel;
 
   // Notifications
-  final _notificationController = StreamController<NotificationEvent>.broadcast();
+  final _notificationController =
+      StreamController<NotificationEvent>.broadcast();
 
   // 3. Expose the stream (The UI will listen to this)
-  Stream<NotificationEvent> get notificationStream => _notificationController.stream;
+  Stream<NotificationEvent> get notificationStream =>
+      _notificationController.stream;
 
   // --- Actions (appelées par le service réseau ou l'UI)
+
+  bool _isPickupRequested = false;
+  bool get isPickupRequested => _isPickupRequested;
+
+  void setPickupRequested(bool value) {
+    _isPickupRequested = value;
+    notifyListeners();
+  }
 
   void showNotification(String message, {bool isError = false}) {
     _notificationController.add(NotificationEvent(message, isError: isError));
@@ -90,7 +100,7 @@ class RobotProvider with ChangeNotifier {
       hasBeenNotifyLowBattery = true;
     }
 
-    if (newPercentage > 90){
+    if (newPercentage > 90) {
       hasBeenNotifyLowBattery = false;
     }
 
@@ -121,7 +131,7 @@ class RobotProvider with ChangeNotifier {
       [11.75, 30],
       [11.58, 20],
       [11.31, 10],
-      [10.50, 0],  // Danger zone
+      [10.50, 0], // Danger zone
     ];
 
     // 4. Find where the current voltage fits in the table and interpolate
@@ -149,38 +159,44 @@ class RobotProvider with ChangeNotifier {
     _mapResolution = resolution;
     notifyListeners();
   }
-  
+
   // --- Persistance (Sauvegarde & Chargement)
-  
+
   // À appeler au démarrage de l'app
   Future<void> loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
     _serverIP = prefs.getString('serverIP') ?? _serverIP;
     _tcpControlPort = prefs.getInt('tcpControlPort') ?? _tcpControlPort;
     _clientID = prefs.getString('clientID') ?? _clientID;
-    _clientRecvUdpPort = prefs.getInt('clientRecvUdpPort') ?? _clientRecvUdpPort;
+    _clientRecvUdpPort =
+        prefs.getInt('clientRecvUdpPort') ?? _clientRecvUdpPort;
     notifyListeners();
   }
 
   // Appelé depuis l'écran de réglages
-  Future<void> saveSettings(String ip, int tcpPort, String id, int clientUdp) async {
+  Future<void> saveSettings(
+    String ip,
+    int tcpPort,
+    String id,
+    int clientUdp,
+  ) async {
     _serverIP = ip;
     _tcpControlPort = tcpPort;
     _clientID = id;
     _clientRecvUdpPort = clientUdp;
-    
+
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('serverIP', _serverIP);
     await prefs.setInt('tcpControlPort', _tcpControlPort);
     await prefs.setString('clientID', _clientID);
     await prefs.setInt('clientRecvUdpPort', _clientRecvUdpPort);
-    
+
     notifyListeners();
     print("Réglages sauvegardés");
   }
 
   @override
-  void dispose(){
+  void dispose() {
     _notificationController.close();
     super.dispose();
   }
