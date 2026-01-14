@@ -53,6 +53,9 @@ class _ControlScreenState extends State<ControlScreen> {
   Map<String, Offset> _elementPositions = {};
   Map<String, double> _elementScales = {};
 
+  // --- Data Display State ---
+  bool _isDataDisplayExpanded = false;
+
   // Default positions (relative to screen size, will be calculated on first build or reset)
   // We use immediate values for now, but will adjust slightly in build if needed or load from prefs
 
@@ -165,6 +168,7 @@ class _ControlScreenState extends State<ControlScreen> {
 
   @override
   void dispose() {
+    _notifSubscription?.cancel();
     _robotService.disconnect();
     super.dispose();
   }
@@ -387,35 +391,97 @@ udpsrc port=5004
           // Top Center: Data Display
           _buildDraggableElement(
             id: 'topCenter',
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                color: Colors.black45,
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: Colors.white10),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _buildOdomItem(
-                    Icons.speed,
-                    "${provider.odomLinearX.toStringAsFixed(2)} m/s",
-                  ),
-                  const SizedBox(width: 12),
-                  Container(width: 1, height: 15, color: Colors.white24),
-                  const SizedBox(width: 12),
-                  _buildOdomItem(
-                    Icons.battery_std,
-                    "${provider.batteryLevel.toInt()}%",
-                    color: provider.batteryLevel < 20
-                        ? Colors.red
-                        : Colors.green,
-                  ),
-                  const SizedBox(width: 12),
-                  Container(width: 1, height: 15, color: Colors.white24),
-                  const SizedBox(width: 12),
-                  _buildOdomItem(Icons.bolt, "120 W"),
-                ],
+            child: GestureDetector(
+              onTap: () {
+                if (!_isEditMode) {
+                  setState(() {
+                    _isDataDisplayExpanded = !_isDataDisplayExpanded;
+                  });
+                }
+              },
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeInOut,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
+                decoration: BoxDecoration(
+                  color:
+                      Colors.black54, // Slightly clearer for better visibility
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: Colors.white10),
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Main Row (Always visible)
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _buildOdomItem(
+                          Icons.speed,
+                          "${provider.odomLinearX.toStringAsFixed(2)} m/s",
+                        ),
+                        const SizedBox(width: 12),
+                        Container(width: 1, height: 15, color: Colors.white24),
+                        const SizedBox(width: 12),
+                        _buildOdomItem(
+                          Icons.battery_std,
+                          "${provider.batteryLevel.toInt()}%",
+                          color: provider.batteryLevel < 20
+                              ? Colors.red
+                              : Colors.green,
+                        ),
+                        const SizedBox(width: 12),
+                        Container(width: 1, height: 15, color: Colors.white24),
+                        const SizedBox(width: 12),
+                        _buildOdomItem(Icons.bolt, "120 W"),
+                      ],
+                    ),
+                    // Expanded Data
+                    if (_isDataDisplayExpanded) ...[
+                      const SizedBox(height: 12),
+                      Container(height: 1, color: Colors.white12),
+                      const SizedBox(height: 12),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _buildDetailItem(
+                                "Angular Z",
+                                "${provider.odomAngularZ.toStringAsFixed(2)} rad/s",
+                              ),
+                              const SizedBox(height: 4),
+                              _buildDetailItem(
+                                "Map Yaw",
+                                "${(provider.mapCarYaw * 180 / 3.14159).toStringAsFixed(1)}°",
+                              ),
+                            ],
+                          ),
+                          const SizedBox(width: 20),
+                          Container(
+                            width: 1,
+                            height: 30,
+                            color: Colors.white12,
+                          ),
+                          const SizedBox(width: 20),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _buildDetailItem("IP", provider.serverIP),
+                              const SizedBox(height: 4),
+                              _buildDetailItem("ID", provider.clientID),
+                            ],
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                    ],
+                  ],
+                ),
               ),
             ),
           ),
@@ -812,15 +878,37 @@ udpsrc port=5004
     Color color = Colors.white,
   }) {
     return Row(
+      mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, size: 14, color: Colors.white70),
+        Icon(icon, color: Colors.white54, size: 14),
         const SizedBox(width: 6),
         Text(
           value,
           style: TextStyle(
             color: color,
+            fontSize: 14,
             fontWeight: FontWeight.bold,
-            fontSize: 13,
+            fontFamily: "monospace",
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDetailItem(String label, String value) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          "$label: ",
+          style: const TextStyle(color: Colors.white54, fontSize: 12),
+        ),
+        Text(
+          value,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
           ),
         ),
       ],
