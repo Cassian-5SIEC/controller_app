@@ -67,6 +67,23 @@ class RobotProvider with ChangeNotifier {
     notifyListeners();
   }
 
+  // --- Trash Detection (Valid only for 1s) ---
+  bool _isTrashDetected = false;
+  Timer? _trashTimer;
+
+  bool get isTrashDetected => _isTrashDetected;
+
+  void setTrashDetected() {
+    _isTrashDetected = true;
+    notifyListeners();
+
+    _trashTimer?.cancel();
+    _trashTimer = Timer(const Duration(seconds: 1), () {
+      _isTrashDetected = false;
+      notifyListeners();
+    });
+  }
+
   void showNotification(String message, {bool isError = false}) {
     _notificationController.add(NotificationEvent(message, isError: isError));
   }

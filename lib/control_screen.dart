@@ -615,6 +615,9 @@ udpsrc port=5004
                     }, isBig: true),
                   ],
                 ),
+                const SizedBox(height: 12),
+                _buildPickupButton(provider),
+
                 // Edit Button
                 const SizedBox(height: 10),
                 GestureDetector(
@@ -1026,6 +1029,32 @@ udpsrc port=5004
           fontWeight: FontWeight.bold,
           color: Colors.white,
         ),
+      ),
+    );
+  }
+
+  Widget _buildPickupButton(RobotProvider provider) {
+    bool isEnabled = provider.isTrashDetected;
+    bool isInteractive = isEnabled && !_isEditMode;
+    return ElevatedButton.icon(
+      onPressed: isInteractive
+          ? () {
+              // Send the single correct confirmation message
+              _robotService.sendTrashPickupConfirm();
+              _showNotification("Trash Pickup Confirmed");
+            }
+          : null,
+      style: ElevatedButton.styleFrom(
+        backgroundColor: isEnabled ? Colors.greenAccent : Colors.grey.shade800,
+        foregroundColor: Colors.black,
+        disabledBackgroundColor: Colors.grey.shade800,
+        disabledForegroundColor: Colors.white24,
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+      ),
+      icon: const Icon(FontAwesomeIcons.trashCan, size: 18),
+      label: const Text(
+        "PICKUP TRASH",
+        style: TextStyle(fontWeight: FontWeight.bold),
       ),
     );
   }

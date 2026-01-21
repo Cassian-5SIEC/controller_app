@@ -38,9 +38,12 @@ class RobotService {
       };
       // --- FIN DU BLOC ---
 
+      // Enable TCP_NODELAY to ensure packets are sent immediately without flush()
+      socket.setOption(SocketOption.tcpNoDelay, true);
+
       // Envoi du message d'enregistrement
       socket.write(json.encode(registerMsg));
-      await socket.flush();
+      // await socket.flush(); // Removed to avoid blocking/binding issues
 
       // Prépare la socket persistante et un listener unique. On utilise un
       // Completer pour attendre la première réponse (sans appeler socket.first
@@ -104,6 +107,9 @@ class RobotService {
                   } else if (msg['type'] == 'ask-pickup') {
                     print('[TCP] Demande de pickup reçue');
                     _provider.setPickupRequested(true);
+                  } else if (msg['type'] == 'trash-detected') {
+                    // print('[TCP] Trash detected signal'); // Uncomment if debug needed
+                    _provider.setTrashDetected();
                   } else {
                     print('[TCP] Message reçu du serveur: $msg');
                   }
@@ -266,7 +272,7 @@ class RobotService {
     if (_tcpSocket != null) {
       try {
         _tcpSocket!.write(json.encode(stopMsg));
-        _tcpSocket!.flush();
+        // _tcpSocket!.flush();
       } catch (e) {
         print("[TCP] Erreur en envoyant stop via socket existante: $e");
       }
@@ -302,7 +308,7 @@ class RobotService {
     if (_tcpSocket != null) {
       try {
         _tcpSocket!.write(json.encode(startMsg));
-        _tcpSocket!.flush();
+        // _tcpSocket!.flush();
       } catch (e) {
         print("[TCP] Erreur en envoyant start via socket existante: $e");
       }
@@ -342,7 +348,7 @@ class RobotService {
     if (_tcpSocket != null) {
       try {
         _tcpSocket!.write(json.encode(modeMsg));
-        _tcpSocket!.flush();
+        // _tcpSocket!.flush();
       } catch (e) {
         print("[TCP] Erreur en envoyant set_mode via socket existante: $e");
       }
@@ -382,13 +388,33 @@ class RobotService {
     if (_tcpSocket != null) {
       try {
         _tcpSocket!.write(json.encode(respMsg));
-        _tcpSocket!.flush();
+        // _tcpSocket!.flush();
       } catch (e) {
         print("[TCP] Erreur en envoyant response-pickup: $e");
       }
     } else {
       // Fallback éphémère si needed, mais normalement on est connecté
       print("[TCP] Erreur: Pas de connexion pour envoyer response-pickup");
+    }
+  }
+
+  void sendTrashPickupConfirm() {
+    print("[TCP] Envoi confirmation trash pickup");
+    final msg = {
+      "type": "response-pickup",
+      "client_id": _provider.clientID,
+      "response": true,
+    };
+
+    if (_tcpSocket != null) {
+      try {
+        _tcpSocket!.write(json.encode(msg));
+        // _tcpSocket!.flush();
+      } catch (e) {
+        print("[TCP] Erreur en envoyant trash-pickup confirm: $e");
+      }
+    } else {
+      print("[TCP] Erreur: Pas de connexion pour envoyer trash-pickup confirm");
     }
   }
 
