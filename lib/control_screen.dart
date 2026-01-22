@@ -218,43 +218,45 @@ class _ControlScreenState extends State<ControlScreen> {
     HudNotification item,
     Animation<double> animation,
   ) {
-    return SizeTransition(
-      sizeFactor: animation,
-      child: FadeTransition(
-        opacity: animation,
-        child: Padding(
-          padding: const EdgeInsets.only(bottom: 8.0),
-          child: Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              color: Colors.black87,
-              borderRadius: BorderRadius.circular(8),
-              border: Border(left: BorderSide(color: item.color, width: 4)),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.5),
-                  blurRadius: 10,
-                  offset: const Offset(2, 2),
-                ),
-              ],
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(item.icon, color: item.color, size: 20),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    item.message,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w500,
+    return MergeSemantics(
+      child: SizeTransition(
+        sizeFactor: animation,
+        child: FadeTransition(
+          opacity: animation,
+          child: Padding(
+            padding: const EdgeInsets.only(bottom: 8.0),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: Colors.black87,
+                borderRadius: BorderRadius.circular(8),
+                border: Border(left: BorderSide(color: item.color, width: 4)),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.5),
+                    blurRadius: 10,
+                    offset: const Offset(2, 2),
+                  ),
+                ],
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(item.icon, color: item.color, size: 20),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      item.message,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
@@ -279,7 +281,10 @@ class _ControlScreenState extends State<ControlScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final provider = context.watch<RobotProvider>();
+    // final provider = context.watch<RobotProvider>(); // Removed for performance
+    final isPickupRequested = context.select<RobotProvider, bool>(
+      (p) => p.isPickupRequested,
+    );
     final size = MediaQuery.of(context).size;
 
     // Initialize defaults if empty (first run)
@@ -321,8 +326,9 @@ class _ControlScreenState extends State<ControlScreen> {
             child: Stack(
               fit: StackFit.expand,
               children: [
-                const GstPlayer(
-                  pipeline: '''
+                ExcludeSemantics(
+                  child: const GstPlayer(
+                    pipeline: '''
 udpsrc port=5004 
 ! application/x-rtp,media=video,clock-rate=90000,encoding-name=H264,payload=96 
 ! rtph264depay 
@@ -332,19 +338,22 @@ udpsrc port=5004
 ! video/x-raw,format=RGBA 
 ! appsink name=sink sync=false
 ''',
+                  ),
                 ),
-                Container(
-                  decoration: const BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        Colors.black87,
-                        Colors.transparent,
-                        Colors.transparent,
-                        Colors.black87,
-                      ],
-                      stops: [0.0, 0.2, 0.7, 1.0],
+                ExcludeSemantics(
+                  child: Container(
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.black87,
+                          Colors.transparent,
+                          Colors.transparent,
+                          Colors.black87,
+                        ],
+                        stops: [0.0, 0.2, 0.7, 1.0],
+                      ),
                     ),
                   ),
                 ),
@@ -361,28 +370,58 @@ udpsrc port=5004
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                _buildConnectionBadge(provider.isConnected),
+                Selector<RobotProvider, bool>(
+                  selector: (_, p) => p.isConnected,
+                  builder: (_, isConnected, __) =>
+                      _buildConnectionBadge(isConnected),
+                ),
                 const SizedBox(height: 10),
-                IconButton(
-                  icon: const Icon(Icons.settings, color: Colors.white70),
-                  onPressed: _isEditMode
-                      ? null
-                      : () async {
-                          SystemChrome.setEnabledSystemUIMode(
-                            SystemUiMode.edgeToEdge,
-                          );
-                          await Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => const SettingsScreen(),
-                            ),
-                          );
-                          SystemChrome.setEnabledSystemUIMode(
-                            SystemUiMode.immersiveSticky,
-                          );
-                          _robotService.disconnect();
-                          _connect();
-                        },
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.settings, color: Colors.white70),
+                      onPressed: _isEditMode
+                          ? null
+                          : () async {
+                              SystemChrome.setEnabledSystemUIMode(
+                                SystemUiMode.edgeToEdge,
+                              );
+                              await Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => const SettingsScreen(),
+                                ),
+                              );
+                              SystemChrome.setEnabledSystemUIMode(
+                                SystemUiMode.immersiveSticky,
+                              );
+                              _robotService.disconnect();
+                              _connect();
+                            },
+                    ),
+                    IconButton(
+                      icon: Icon(
+                        _isEditMode ? Icons.check : Icons.dashboard_customize,
+                        color: _isEditMode
+                            ? Colors.greenAccent
+                            : Colors.white70,
+                      ),
+                      onPressed: () {
+                        setState(() {
+                          _isEditMode = !_isEditMode;
+                          if (!_isEditMode) {
+                            _savePositions();
+                            _showNotification("Layout Saved");
+                          } else {
+                            _showNotification(
+                              "Edit Mode: Drag elements to move, +/- to scale",
+                            );
+                          }
+                        });
+                      },
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -412,75 +451,89 @@ udpsrc port=5004
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(color: Colors.white10),
                 ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // Main Row (Always visible)
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        _buildOdomItem(
-                          Icons.speed,
-                          "${provider.odomLinearX.toStringAsFixed(2)} m/s",
-                        ),
-                        const SizedBox(width: 12),
-                        Container(width: 1, height: 15, color: Colors.white24),
-                        const SizedBox(width: 12),
-                        _buildOdomItem(
-                          Icons.battery_std,
-                          "${provider.batteryLevel.toInt()}%",
-                          color: provider.batteryLevel < 20
-                              ? Colors.red
-                              : Colors.green,
-                        ),
-                        const SizedBox(width: 12),
-                        Container(width: 1, height: 15, color: Colors.white24),
-                        const SizedBox(width: 12),
-                        _buildOdomItem(Icons.bolt, "120 W"),
-                      ],
-                    ),
-                    // Expanded Data
-                    if (_isDataDisplayExpanded) ...[
-                      const SizedBox(height: 12),
-                      Container(height: 1, color: Colors.white12),
-                      const SizedBox(height: 12),
-                      Row(
+                child: Consumer<RobotProvider>(
+                  builder: (context, provider, _) {
+                    return MergeSemantics(
+                      child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                          // Main Row (Always visible)
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
                             children: [
-                              _buildDetailItem(
-                                "Angular Z",
-                                "${provider.odomAngularZ.toStringAsFixed(2)} rad/s",
+                              _buildOdomItem(
+                                Icons.speed,
+                                "${provider.odomLinearX.toStringAsFixed(2)} m/s",
                               ),
-                              const SizedBox(height: 4),
-                              _buildDetailItem(
-                                "Map Yaw",
-                                "${(provider.mapCarYaw * 180 / 3.14159).toStringAsFixed(1)}°",
+                              const SizedBox(width: 12),
+                              Container(
+                                width: 1,
+                                height: 15,
+                                color: Colors.white24,
                               ),
+                              const SizedBox(width: 12),
+                              _buildOdomItem(
+                                Icons.battery_std,
+                                "${provider.batteryLevel.toInt()}%",
+                                color: provider.batteryLevel < 20
+                                    ? Colors.red
+                                    : Colors.green,
+                              ),
+                              const SizedBox(width: 12),
+                              Container(
+                                width: 1,
+                                height: 15,
+                                color: Colors.white24,
+                              ),
+                              const SizedBox(width: 12),
+                              _buildOdomItem(Icons.bolt, "120 W"),
                             ],
                           ),
-                          const SizedBox(width: 20),
-                          Container(
-                            width: 1,
-                            height: 30,
-                            color: Colors.white12,
-                          ),
-                          const SizedBox(width: 20),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              _buildDetailItem("IP", provider.serverIP),
-                              const SizedBox(height: 4),
-                              _buildDetailItem("ID", provider.clientID),
-                            ],
-                          ),
+                          // Expanded Data
+                          if (_isDataDisplayExpanded) ...[
+                            const SizedBox(height: 12),
+                            Container(height: 1, color: Colors.white12),
+                            const SizedBox(height: 12),
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    _buildDetailItem(
+                                      "Angular Z",
+                                      "${provider.odomAngularZ.toStringAsFixed(2)} rad/s",
+                                    ),
+                                    const SizedBox(height: 4),
+                                    _buildDetailItem(
+                                      "Map Yaw",
+                                      "${(provider.mapCarYaw * 180 / 3.14159).toStringAsFixed(1)}°",
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(width: 20),
+                                Container(
+                                  width: 1,
+                                  height: 30,
+                                  color: Colors.white12,
+                                ),
+                                const SizedBox(width: 20),
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    _buildDetailItem("IP", provider.serverIP),
+                                    const SizedBox(height: 4),
+                                    _buildDetailItem("ID", provider.clientID),
+                                  ],
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 4),
+                          ],
                         ],
                       ),
-                      const SizedBox(height: 4),
-                    ],
-                  ],
+                    );
+                  },
                 ),
               ),
             ),
@@ -517,33 +570,36 @@ udpsrc port=5004
                 const SizedBox(height: 8),
                 IgnorePointer(
                   ignoring: _isEditMode,
-                  child: Joystick(
-                    mode: JoystickMode.vertical,
-                    listener: (details) {
-                      setState(() => _cmdLinear = -details.y);
-                    },
-                    base: Container(
-                      width: 130,
-                      height: 130,
-                      decoration: BoxDecoration(
-                        color: Colors.white10,
-                        shape: BoxShape.circle,
-                        border: Border.all(color: Colors.white30, width: 2),
+                  child: ExcludeSemantics(
+                    child: Joystick(
+                      mode: JoystickMode.vertical,
+                      listener: (details) {
+                        _cmdLinear = -details.y;
+                        // setState(() => _cmdLinear = -details.y); // Removed to prevent full rebuild
+                      },
+                      base: Container(
+                        width: 130,
+                        height: 130,
+                        decoration: BoxDecoration(
+                          color: Colors.white10,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white30, width: 2),
+                        ),
                       ),
-                    ),
-                    stick: Container(
-                      width: 50,
-                      height: 50,
-                      decoration: BoxDecoration(
-                        color: Colors.cyan.withOpacity(0.8),
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.cyan.withOpacity(0.4),
-                            blurRadius: 10,
-                            spreadRadius: 2,
-                          ),
-                        ],
+                      stick: Container(
+                        width: 50,
+                        height: 50,
+                        decoration: BoxDecoration(
+                          color: Colors.cyan.withOpacity(0.8),
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.cyan.withOpacity(0.4),
+                              blurRadius: 10,
+                              spreadRadius: 2,
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
@@ -616,46 +672,12 @@ udpsrc port=5004
                   ],
                 ),
                 const SizedBox(height: 12),
-                _buildPickupButton(provider),
-
-                // Edit Button
-                const SizedBox(height: 10),
-                GestureDetector(
-                  onTap: () {
-                    setState(() {
-                      _isEditMode = !_isEditMode;
-                      if (!_isEditMode) {
-                        _savePositions();
-                        _showNotification("Layout Saved");
-                      } else {
-                        _showNotification(
-                          "Edit Mode: Drag elements to move, +/- to scale",
-                        );
-                      }
-                    });
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: _isEditMode
-                          ? Colors.yellowAccent
-                          : Colors.transparent,
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: Colors.white24),
-                    ),
-                    child: Text(
-                      _isEditMode ? "DONE" : "EDIT UI",
-                      style: TextStyle(
-                        color: _isEditMode ? Colors.black : Colors.white54,
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
+                Consumer<RobotProvider>(
+                  builder: (context, provider, _) =>
+                      _buildPickupButton(provider),
                 ),
+
+                // Edit Button removed (moved to top left)
               ],
             ),
           ),
@@ -673,33 +695,36 @@ udpsrc port=5004
                 const SizedBox(height: 8),
                 IgnorePointer(
                   ignoring: _isEditMode,
-                  child: Joystick(
-                    mode: JoystickMode.horizontal,
-                    listener: (details) {
-                      setState(() => _cmdAngular = -details.x);
-                    },
-                    base: Container(
-                      width: 130,
-                      height: 130,
-                      decoration: BoxDecoration(
-                        color: Colors.white10,
-                        shape: BoxShape.circle,
-                        border: Border.all(color: Colors.white30, width: 2),
+                  child: ExcludeSemantics(
+                    child: Joystick(
+                      mode: JoystickMode.horizontal,
+                      listener: (details) {
+                        _cmdAngular = -details.x;
+                        // setState(() => _cmdAngular = -details.x); // Removed to prevent full rebuild
+                      },
+                      base: Container(
+                        width: 130,
+                        height: 130,
+                        decoration: BoxDecoration(
+                          color: Colors.white10,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white30, width: 2),
+                        ),
                       ),
-                    ),
-                    stick: Container(
-                      width: 50,
-                      height: 50,
-                      decoration: BoxDecoration(
-                        color: Colors.purpleAccent.withOpacity(0.8),
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.purpleAccent.withOpacity(0.4),
-                            blurRadius: 10,
-                            spreadRadius: 2,
-                          ),
-                        ],
+                      stick: Container(
+                        width: 50,
+                        height: 50,
+                        decoration: BoxDecoration(
+                          color: Colors.purpleAccent.withOpacity(0.8),
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.purpleAccent.withOpacity(0.4),
+                              blurRadius: 10,
+                              spreadRadius: 2,
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
@@ -729,10 +754,17 @@ udpsrc port=5004
           ),
 
           // --- 6. PICKUP POPUP ---
-          if (provider.isPickupRequested || _isEditMode)
+          // --- 6. PICKUP POPUP ---
+          if (isPickupRequested || _isEditMode)
             _buildDraggableElement(
               id: 'pickupPopup',
-              child: _buildPickupPopup(provider),
+              child: BlockSemantics(
+                blocking: true,
+                child: Consumer<RobotProvider>(
+                  builder: (context, provider, _) =>
+                      _buildPickupPopup(provider),
+                ),
+              ),
             ),
 
           if (_isEditMode)
@@ -773,58 +805,60 @@ udpsrc port=5004
                 });
               }
             : null,
-        child: Stack(
-          clipBehavior: Clip.none,
-          children: [
-            // The Scaled Widget
-            Transform.scale(
-              scale: scale,
-              child: Container(
-                decoration: _isEditMode
-                    ? BoxDecoration(
-                        border: Border.all(
-                          color: Colors.yellowAccent,
-                          width: 2 / scale,
-                          style: BorderStyle.solid,
-                        ),
-                        color: Colors.black38,
-                        borderRadius: BorderRadius.circular(8),
-                      )
-                    : null,
-                padding: _isEditMode
-                    ? const EdgeInsets.all(8)
-                    : EdgeInsets.zero,
-                child: child,
-              ),
-            ),
-
-            // Scaling Controls
-            if (_isEditMode)
-              Positioned(
-                top: -15,
-                right: -15,
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    _buildScaleBtn(Icons.remove, () {
-                      setState(() {
-                        double s = _elementScales[id] ?? 1.0;
-                        s = (s - 0.1).clamp(0.5, 3.0);
-                        _elementScales[id] = s;
-                      });
-                    }),
-                    const SizedBox(width: 4),
-                    _buildScaleBtn(Icons.add, () {
-                      setState(() {
-                        double s = _elementScales[id] ?? 1.0;
-                        s = (s + 0.1).clamp(0.5, 3.0);
-                        _elementScales[id] = s;
-                      });
-                    }),
-                  ],
+        child: MergeSemantics(
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              // The Scaled Widget
+              Transform.scale(
+                scale: scale,
+                child: Container(
+                  decoration: _isEditMode
+                      ? BoxDecoration(
+                          border: Border.all(
+                            color: Colors.yellowAccent,
+                            width: 2 / scale,
+                            style: BorderStyle.solid,
+                          ),
+                          color: Colors.black38,
+                          borderRadius: BorderRadius.circular(8),
+                        )
+                      : null,
+                  padding: _isEditMode
+                      ? const EdgeInsets.all(8)
+                      : EdgeInsets.zero,
+                  child: child,
                 ),
               ),
-          ],
+
+              // Scaling Controls
+              if (_isEditMode)
+                Positioned(
+                  top: -15,
+                  right: -15,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _buildScaleBtn(Icons.remove, () {
+                        setState(() {
+                          double s = _elementScales[id] ?? 1.0;
+                          s = (s - 0.1).clamp(0.5, 3.0);
+                          _elementScales[id] = s;
+                        });
+                      }),
+                      const SizedBox(width: 4),
+                      _buildScaleBtn(Icons.add, () {
+                        setState(() {
+                          double s = _elementScales[id] ?? 1.0;
+                          s = (s + 0.1).clamp(0.5, 3.0);
+                          _elementScales[id] = s;
+                        });
+                      }),
+                    ],
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
     );
@@ -854,22 +888,24 @@ udpsrc port=5004
   }
 
   Widget _buildConnectionBadge(bool isConnected) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: isConnected
-            ? Colors.green.withOpacity(0.2)
-            : Colors.red.withOpacity(0.2),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: isConnected ? Colors.green : Colors.red),
-      ),
-      child: Text(
-        isConnected ? "CONNECTED" : "DISCONNECTED",
-        style: TextStyle(
-          color: isConnected ? Colors.greenAccent : Colors.redAccent,
-          fontSize: 10,
-          fontWeight: FontWeight.bold,
-          letterSpacing: 1.0,
+    return MergeSemantics(
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: isConnected
+              ? Colors.green.withOpacity(0.2)
+              : Colors.red.withOpacity(0.2),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: isConnected ? Colors.green : Colors.red),
+        ),
+        child: Text(
+          isConnected ? "CONNECTED" : "DISCONNECTED",
+          style: TextStyle(
+            color: isConnected ? Colors.greenAccent : Colors.redAccent,
+            fontSize: 10,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 1.0,
+          ),
         ),
       ),
     );
@@ -880,41 +916,45 @@ udpsrc port=5004
     String value, {
     Color color = Colors.white,
   }) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, color: Colors.white54, size: 14),
-        const SizedBox(width: 6),
-        Text(
-          value,
-          style: TextStyle(
-            color: color,
-            fontSize: 14,
-            fontWeight: FontWeight.bold,
-            fontFamily: "monospace",
+    return MergeSemantics(
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: Colors.white54, size: 14),
+          const SizedBox(width: 6),
+          Text(
+            value,
+            style: TextStyle(
+              color: color,
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+              fontFamily: "monospace",
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
   Widget _buildDetailItem(String label, String value) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          "$label: ",
-          style: const TextStyle(color: Colors.white54, fontSize: 12),
-        ),
-        Text(
-          value,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 12,
-            fontWeight: FontWeight.w500,
+    return MergeSemantics(
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            "$label: ",
+            style: const TextStyle(color: Colors.white54, fontSize: 12),
           ),
-        ),
-      ],
+          Text(
+            value,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
     );
   }
 

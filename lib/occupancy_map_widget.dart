@@ -21,17 +21,19 @@ class OccupancyMapWidget extends StatelessWidget {
           );
         }
 
-        return Container(
-          color: Colors.black.withOpacity(0.5), // Background for the map area
-          child: CustomPaint(
-            painter: MapPainter(
-              width: provider.mapWidth,
-              height: provider.mapHeight,
-              data: provider.mapData,
-              carYaw: provider.mapCarYaw,
+        return ExcludeSemantics(
+          child: Container(
+            color: Colors.black.withOpacity(0.5), // Background for the map area
+            child: CustomPaint(
+              painter: MapPainter(
+                width: provider.mapWidth,
+                height: provider.mapHeight,
+                data: provider.mapData,
+                carYaw: provider.mapCarYaw,
+              ),
+              // Ensure the widget takes up available space but maintains aspect ratio if needed
+              child: Container(),
             ),
-            // Ensure the widget takes up available space but maintains aspect ratio if needed
-            child: Container(),
           ),
         );
       },
