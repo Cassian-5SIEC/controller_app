@@ -65,9 +65,13 @@ static void flutter_gstreamer_player_plugin_handle_method_call(
         video_outlet_private->buffer = frame;
         video_outlet_private->video_width = width;
         video_outlet_private->video_height = height;
-        fl_texture_registrar_mark_texture_frame_available(
-            texture_registrar,
-            FL_TEXTURE(video_outlet_ptr));
+
+        g_idle_add_full(G_PRIORITY_DEFAULT_IDLE, (GSourceFunc)[](gpointer user_data) -> gboolean {
+            auto data = (std::pair<FlTextureRegistrar*, VideoOutlet*>*)user_data;
+            fl_texture_registrar_mark_texture_frame_available(data->first, FL_TEXTURE(data->second));
+            delete data;
+            return FALSE;
+        }, new std::pair<FlTextureRegistrar*, VideoOutlet*>(texture_registrar, video_outlet_ptr), nullptr);
       });
     }
 
