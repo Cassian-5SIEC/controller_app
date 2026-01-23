@@ -25,6 +25,11 @@ class RobotProvider with ChangeNotifier {
   double _odomAngularZ = 0.0;
   double _batteryLevel = 0.0;
 
+  double _batteryPower = 0.0;
+  double _leftMotorPower = 0.0;
+  double _rightMotorPower = 0.0;
+  double _jetsonPower = 0.0;
+
   // --- Map Data ---
   List<int> _mapData = [];
   int _mapWidth = 0;
@@ -48,6 +53,11 @@ class RobotProvider with ChangeNotifier {
   double get odomLinearX => _odomLinearX;
   double get odomAngularZ => _odomAngularZ;
   double get batteryLevel => _batteryLevel;
+
+  double get batteryPower => _batteryPower;
+  double get leftMotorPower => _leftMotorPower;
+  double get rightMotorPower => _rightMotorPower;
+  double get jetsonPower => _jetsonPower;
 
   // Notifications
   final _notificationController =
@@ -102,6 +112,19 @@ class RobotProvider with ChangeNotifier {
     const double epsilon = 5e-2; // or any small value
     _odomLinearX = (linearX.abs() < epsilon) ? 0.0 : linearX + 0.0;
     _odomAngularZ = angularZ;
+    notifyListeners();
+  }
+
+  void updatePowers(
+    double batteryPower,
+    double leftMotorPower,
+    double rightMotorPower,
+    double jetsonPower,
+  ) {
+    _batteryPower = batteryPower;
+    _leftMotorPower = leftMotorPower;
+    _rightMotorPower = rightMotorPower;
+    _jetsonPower = jetsonPower;
     notifyListeners();
   }
 

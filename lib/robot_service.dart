@@ -201,6 +201,18 @@ class RobotService {
             _provider.updateOdometry(lx, az);
           } else if (message["type"] == "general_data") {
             double level = (message['battery_level'] ?? 0.0).toDouble();
+            double battery_power = (message['battery_power'] ?? 0.0).toDouble();
+            double left_motor_power = (message['left_motor_power'] ?? 0.0)
+                .toDouble();
+            double right_motor_power = (message['right_motor_power'] ?? 0.0)
+                .toDouble();
+            double jetson_power = (message['jetson_power'] ?? 0.0).toDouble();
+            _provider.updatePowers(
+              battery_power,
+              left_motor_power,
+              right_motor_power,
+              jetson_power,
+            );
             _provider.updateBatteryLevel(level);
           } else if (message["type"] == "occupancy_grid") {
             int w = message['width'];

@@ -486,7 +486,10 @@ udpsrc port=5004
                                 color: Colors.white24,
                               ),
                               const SizedBox(width: 12),
-                              _buildOdomItem(Icons.bolt, "120 W"),
+                              _buildOdomItem(
+                                Icons.bolt,
+                                provider.batteryPower.toStringAsFixed(2) + " W",
+                              ),
                             ],
                           ),
                           // Expanded Data
@@ -501,13 +504,13 @@ udpsrc port=5004
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     _buildDetailItem(
-                                      "Angular Z",
-                                      "${provider.odomAngularZ.toStringAsFixed(2)} rad/s",
+                                      "Jetson Power",
+                                      "${provider.jetsonPower.toStringAsFixed(2)} W",
                                     ),
                                     const SizedBox(height: 4),
                                     _buildDetailItem(
-                                      "Map Yaw",
-                                      "${(provider.mapCarYaw * 180 / 3.14159).toStringAsFixed(1)}°",
+                                      "Left Motor Power",
+                                      "${provider.leftMotorPower.toStringAsFixed(2)} W",
                                     ),
                                   ],
                                 ),
@@ -521,9 +524,15 @@ udpsrc port=5004
                                 Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    _buildDetailItem("IP", provider.serverIP),
+                                    _buildDetailItem(
+                                      "IP",
+                                      "${provider.serverIP}",
+                                    ),
                                     const SizedBox(height: 4),
-                                    _buildDetailItem("ID", provider.clientID),
+                                    _buildDetailItem(
+                                      "Right Motor Power",
+                                      "${provider.rightMotorPower.toStringAsFixed(2)} W",
+                                    ),
                                   ],
                                 ),
                               ],
