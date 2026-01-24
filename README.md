@@ -1,15 +1,18 @@
 # Robot UDP/TCP Controller (Flutter)
 
-A simple Flutter application for Android designed to remotely control a robot (e.g., a ROS 2-based system) over a local network. It features a joystick for sending velocity commands and displays real-time odometry feedback.
+A Flutter application for Android designed to remotely control a robot (e.g., a ROS 2-based system) over a local network. It features a joystick for velocity control, displays real-time odometry and power usage, renders an occupancy grid map, and streams live video from the robot.
 
 ## Features
 
-  * 🕹️ **Joystick Control:** Sends `cmd_vel` (linear X and angular Z) commands at 10Hz.
-  * 📊 **Real-time Feedback:** Receives and displays `real_vel` (odometry) data from the robot.
-  * 📡 **TCP/UDP Protocol:** Uses TCP for an initial registration (handshake) and UDP for low-latency, real-time data exchange.
-  * ⚙️ **Configurable Settings:** Save your server's IP address and port configuration locally.
-  * 📱 **Immersive UI:** Runs in full-screen mode to maximize space for controls.
-  * 🟢 **Connection Status:** A simple indicator shows if the app is successfully registered with the server.
+*   🕹️ **Joystick Control:** Sends `cmd_vel` (linear X and angular Z) commands at 10Hz.
+*   🎥 **Video Streaming:** Low-latency H.264 video streaming via UDP (port 5004).
+*   �️ **Occupancy Grid Map:** Renders a real-time obstacle map received from the robot.
+*   📊 **Real-time Telemetry:** Displays odometry speed, battery level, motor power, and Jetson power usage.
+*   🗑️ **Interactive Pickup System:** Receives "trash detected" alerts and handles "pickup" requests/responses.
+*   📡 **TCP/UDP Protocol:** TCP for robust control (start/stop/mode) and handshake; UDP for high-frequency data (video, map, odometry).
+*   ⚙️ **Configurable Settings:** Save server IP, ports, and client ID.
+*   🎨 **Customizable HUD:** Move and scale UI elements (joysticks, map, data display) to suit your preference.
+*   � **Mode Switching:** Toggle between Manual, Auto, and Calibration modes.
 
 -----
 
@@ -17,9 +20,9 @@ A simple Flutter application for Android designed to remotely control a robot (e
 
 ### Prerequisites
 
-  * [Flutter SDK](https://flutter.dev/docs/get-started/install) installed.
-  * An Android device or emulator.
-  * A server (e.g., a Python script on a ROS 2 machine) running on the same local network.
+*   [Flutter SDK](https://flutter.dev/docs/get-started/install) installed.
+*   An Android device.
+*   A robot running the compatible server (ROS 2 node) on the same local network.
 
 ### Installation & Running
 
@@ -50,78 +53,85 @@ A simple Flutter application for Android designed to remotely control a robot (e
 Before the app can connect, you **must** configure it to point to your server.
 
 1.  Start the app.
-2.  Tap the **settings icon** (⚙️) in the top-right corner.
+2.  Tap the **settings icon** (⚙️) in the top-left corner.
 3.  Enter your server's details:
       * **Server IP:** The **LAN IP address** of the machine running your server (e.g., `192.168.1.10`).
-        > **Important:** Do not use `127.0.0.1` or `localhost` unless you are running the server *on the phone itself*.
-      * **TCP Control Port:** The port your server is *listening* on for the initial TCP handshake (e.g., `5001`).
+      * **TCP Control Port:** The port your server is *listening* on for the initial handshake and control commands (e.g., `5001`).
       * **Client ID:** A unique name for this controller (e.g., `robot_1`).
-      * **Client UDP Listen Port:** The port this app will use to *receive* odometry data (e.g., `6006`).
-4.  Tap "Save and Reconnect". The app will save these settings and attempt to register with the server.
+      * **Client UDP Listen Port:** The port this app will use to *receive* data (e.g., `6006`).
+4.  The **Video Port** is currently fixed to `5004` in the code unless modified.
+5.  Tap "Save and Reconnect".
 
 -----
 
-## 🔌 Communication Protocol (How it Works)
+## 🔌 Communication Protocol
 
-This app is only a **client**. It requires a server that follows a specific two-step protocol.
+The system uses a hybrid TCP/UDP protocol.
 
 ### Step 1: TCP Registration (Handshake)
 
-1.  The Flutter app connects to the server at `SERVER_IP:TCP_CONTROL_PORT`.
-2.  The app sends a JSON message to register itself:
+1.  **Connect:** App connects to `SERVER_IP:TCP_CONTROL_PORT`.
+2.  **Register:** App sends:
     ```json
     {
       "type": "register",
       "client_id": "robot_1",
-      "recv_udp_port": 6006
+      "recv_udp_port": 6006,
+      "recv_image_port": 5004
     }
     ```
-3.  The server receives this, registers the client, and replies with a JSON message confirming success and providing the server's own UDP port for data:
+3.  **Acknowledge:** Server replies:
     ```json
     {
       "ok": true,
-      "udp_data_port": 5005 
+      "udp_data_port": 5005
     }
     ```
-    *This `udp_data_port` (e.g., `5005`) is where the app will send its joystick commands.*
 
-### Step 2: UDP Data Exchange (Real-time)
+### Step 2: Protocol Messages
 
-Once registered, all communication becomes UDP.
+#### TCP (Control & Reliable Events)
 
-  * **Client → Server (Joystick Commands):**
-    The app sends `cmd_vel` messages at 10Hz to the `udp_data_port` provided by the server.
+**Client → Server:**
+*   `{"type": "start", "client_id": "..."}` - Start operation.
+*   `{"type": "emergency_stop", "client_id": "..."}` - Immediate stop.
+*   `{"type": "set_mode", "mode": 0/1/2, ...}` - 0: Manual, 1: Auto, 2: Calibration.
+*   `{"type": "response-pickup", "response": true/false}` - User accepted/rejected pickup.
+*   `{"type": "heartbeat_ack"}` - Reply to server heartbeat.
 
-      * **Destination:** `SERVER_IP:5005`
-      * **Payload:**
-        ```json
-        {
-          "client_id": "robot_1",
-          "type": "cmd_vel",
-          "linear_x": 0.5,
-          "angular_z": 0.1
-        }
-        ```
+**Server → Client:**
+*   `{"type": "cmd", "cmd": "start"/"stop"}` - Remote start/stop confirmation.
+*   `{"type": "cmd", "cmd": "set_mode", "mode": 0/1/2}` - Mode update confirmation.
+*   `{"type": "ask-pickup"}` - Triggers a popup asking user to confirm pickup.
+*   `{"type": "trash-detected"}` - Notification that a target was found.
+*   `{"type": "heartbeat"}` - Keep-alive check.
 
-  * **Server → Client (Odometry Data):**
-    The server sends `real_vel` messages back to the app. The server already knows the client's IP (from the TCP connection) and its listening port (from the `recv_udp_port` in the handshake).
+#### UDP (High-Frequency Data)
 
-      * **Destination:** `CLIENT_IP:6006`
-      * **Payload:**
-        ```json
-        {
-          "type": "real_vel",
-          "linear_x": 0.49,
-          "angular_z": 0.09
-        }
-        ```
+**Client → Server (Target: `udp_data_port`):**
+*   **Velocity Command (10Hz):**
+    ```json
+    {
+      "type": "cmd_vel",
+      "linear_x": 0.5,
+      "angular_z": 0.1
+    }
+    ```
+
+**Server → Client (Target: `recv_udp_port`):**
+*   **Odometry:** `{"type": "real_vel", "linear_x": ..., "angular_z": ...}`
+*   **General Data:** `{"type": "general_data", "battery_level": %, "battery_power": W, "left_motor_power": W, "right_motor_power": W, "jetson_power": W}`
+*   **Map:** `{"type": "occupancy_grid", "width": W, "height": H, "data": [0, 100, -1...], "resolution": R, "car_yaw": Y}`
+
+**Server → Client (Target: `recv_image_port` / 5004):**
+*   **Video:** Raw H.264 RTP stream.
 
 -----
 
 ## 🛠️ Key Dependencies
 
-  * **[flutter\_joystick](https://pub.dev/packages/flutter_joystick):** For the joystick UI.
-  * **[provider](https://pub.dev/packages/provider):** For state management (connection status, odometry).
-  * **[shared\_preferences](https://pub.dev/packages/shared_preferences):** For saving and loading the server configuration.
-  * **[udp](https://www.google.com/search?q=https://pub.dev/packages/udp):** For all UDP send/receive operations.
-  * **[dart:io](https://www.google.com/search?q=https://api.dart.dev/stable/2.19.6/dart-io/dart-io-library.html):** Used for the initial TCP `Socket` connection.
+*   **flutter_joystick:** UI controls.
+*   **provider:** State management.
+*   **udp:** Datagram sockets.
+*   **flutter_gstreamer_player:** Low-latency video decoding.
+*   **toggle_switch:** Mode selection.
